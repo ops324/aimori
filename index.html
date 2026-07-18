@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIMORI（アイモリ）｜アイデアを守るAI</title>
+<meta name="description" content="あなたの作品が、知らないどこかで無断で使われていませんか。AIMORIは、イラスト・ハンドメイド・D2Cの作品を、国内のフリマ・SNS・海外ECまで見守り、模倣を見つけてお知らせします。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · macrostructure: Letter (warm editorial narrative) · tone: sincere/warm/和
+ * theme: custom 和 (paper oklch(97% 0.012 85) 生成り · accent oklch(46% 0.086 250) 藍 · display roman-mincho)
+ * genre: editorial · enrichment: Tier-A CSS art (守り紋 seal) · motion: fade-up · hover-lift · seal-draw
+ * honest copy: no fabricated metrics/testimonials/logos · contrast: pass
+ */
+
+:root{
+  /* — 和 palette (OKLCH) — */
+  --color-paper:      oklch(97.5% 0.012 85);   /* 生成り cream */
+  --color-paper-2:    oklch(95%   0.016 82);   /* warm panel */
+  --color-paper-3:    oklch(92%   0.020 80);   /* deeper panel */
+  --color-ink:        oklch(27%   0.018 60);   /* warm sumi */
+  --color-ink-soft:   oklch(44%   0.016 60);   /* muted body */
+  --color-ink-faint:  oklch(60%   0.014 60);   /* captions */
+  --color-line:       oklch(87%   0.018 78);   /* hairline */
+  --color-accent:     oklch(46%   0.086 250);  /* 藍 indigo */
+  --color-accent-ink: oklch(38%   0.090 250);  /* darker indigo (text-on-paper) */
+  --color-accent-soft:oklch(93%   0.030 250);  /* indigo wash */
+  --color-clay:       oklch(64%   0.115 45);   /* 柿 persimmon warmth */
+  --color-clay-soft:  oklch(94%   0.032 55);
+  --color-focus:      oklch(46%   0.086 250);
+  --color-paper-on-accent: oklch(98% 0.010 85);
+
+  /* — type — */
+  --font-display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+
+  --text-xs: .78rem;
+  --text-sm: .88rem;
+  --text-base: 1.02rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.45rem;
+  --text-2xl: 1.85rem;
+  --text-3xl: 2.35rem;
+  --text-4xl: clamp(2.1rem, 6vw, 3.1rem);
+  --text-display: clamp(2.2rem, 6.4vw, 3.6rem);
+
+  /* — space (4pt) — */
+  --space-2xs: .25rem;
+  --space-xs: .5rem;
+  --space-sm: .75rem;
+  --space-md: 1.25rem;
+  --space-lg: 2rem;
+  --space-xl: 3.25rem;
+  --space-2xl: 5rem;
+  --space-3xl: 7.5rem;
+
+  --rule: 1px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --ease-out: cubic-bezier(.22,.61,.36,1);
+  --ease-in-out: cubic-bezier(.65,.05,.36,1);
+  --dur: .5s;
+
+  --measure: 34rem;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{overflow-x:clip}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font-body);
+  background:var(--color-paper);
+  color:var(--color-ink);
+  font-size:var(--text-base);
+  line-height:1.85;
+  letter-spacing:.01em;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+h1,h2,h3{font-family:var(--font-display);font-weight:600;line-height:1.35;letter-spacing:.02em;overflow-wrap:anywhere;min-width:0}
+p{overflow-wrap:anywhere}
+a{color:var(--color-accent-ink);text-underline-offset:.22em;text-decoration-thickness:1px}
+img{max-width:100%;display:block}
+
+.wrap{width:100%;max-width:64rem;margin-inline:auto;padding-inline:var(--space-md)}
+.narrow{max-width:46rem}
+
+:focus-visible{outline:2px solid var(--color-focus);outline-offset:3px;border-radius:3px}
+
+/* — buttons — */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:.5em;
+  font-family:var(--font-body);font-weight:700;font-size:var(--text-base);
+  line-height:1.2;text-decoration:none;white-space:nowrap;
+  padding:.85em 1.6em;border-radius:var(--radius-pill);
+  border:1.5px solid transparent;cursor:pointer;
+  transition:transform .18s var(--ease-out), background-color .18s var(--ease-out), box-shadow .18s var(--ease-out), border-color .18s var(--ease-out);
+}
+.btn-primary{background:var(--color-accent);color:var(--color-paper-on-accent);box-shadow:0 1px 0 oklch(30% 0.09 250 / .35)}
+.btn-primary:hover{background:var(--color-accent-ink);transform:translateY(-2px);box-shadow:0 8px 22px oklch(38% 0.09 250 / .22)}
+.btn-primary:active{transform:translateY(0)}
+.btn-ghost{background:transparent;color:var(--color-accent-ink);border-color:var(--color-line)}
+.btn-ghost:hover{background:var(--color-accent-soft);border-color:var(--color-accent);transform:translateY(-2px)}
+.btn-ghost:active{transform:translateY(0)}
+
+/* — nav — */
+.nav{position:sticky;top:0;z-index:50;background:oklch(97.5% 0.012 85 / .82);backdrop-filter:blur(10px);border-bottom:var(--rule) solid var(--color-line)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;gap:var(--space-md);padding-block:var(--space-sm)}
+.brand{display:flex;align-items:baseline;gap:.55rem;text-decoration:none;color:var(--color-ink)}
+.brand .mark{font-family:var(--font-display);font-weight:700;font-size:1.35rem;letter-spacing:.08em}
+.brand .mark b{color:var(--color-accent-ink)}
+.brand .tag{font-size:var(--text-xs);color:var(--color-ink-faint);letter-spacing:.04em}
+.nav .btn{padding:.6em 1.15em;font-size:var(--text-sm)}
+@media(max-width:560px){.brand .tag{display:none}}
+
+/* — hero — */
+.hero{position:relative;padding-block:var(--space-2xl) var(--space-xl);overflow:hidden}
+.hero::before{
+  content:"";position:absolute;inset:0;z-index:0;
+  background:
+    radial-gradient(120% 90% at 88% 8%, var(--color-accent-soft) 0%, transparent 55%),
+    radial-gradient(90% 70% at 6% 100%, var(--color-clay-soft) 0%, transparent 60%);
+  opacity:.7;
+}
+.hero-in{position:relative;z-index:1;display:grid;grid-template-columns:1fr;gap:var(--space-xl);align-items:center}
+.eyebrow{display:inline-flex;align-items:center;gap:.5em;font-size:var(--text-sm);font-weight:500;color:var(--color-accent-ink);background:oklch(98% 0.01 85 / .7);border:var(--rule) solid var(--color-line);padding:.35em 1em;border-radius:var(--radius-pill);letter-spacing:.03em}
+.eyebrow .dot{width:.5em;height:.5em;border-radius:50%;background:var(--color-clay)}
+.hero h1{font-size:var(--text-display);font-weight:700;line-height:1.3;margin-block:var(--space-md) var(--space-md);letter-spacing:.01em}
+.hero h1 .u{background:linear-gradient(transparent 68%, var(--color-accent-soft) 0);padding-inline:.05em}
+.hero .lead{font-size:var(--text-lg);color:var(--color-ink-soft);max-width:var(--measure);line-height:1.95}
+.hero-cta{display:flex;flex-wrap:wrap;gap:var(--space-sm);margin-top:var(--space-lg)}
+.hero-note{margin-top:var(--space-md);font-size:var(--text-sm);color:var(--color-ink-faint)}
+
+/* seal (CSS art 守り紋) */
+.seal-wrap{display:flex;justify-content:center}
+.seal{width:min(72vw,300px);height:auto;filter:drop-shadow(0 12px 30px oklch(40% 0.06 250 / .14))}
+.seal .ring{fill:none;stroke:var(--color-accent);stroke-width:2.2;opacity:.9}
+.seal .ring2{fill:none;stroke:var(--color-clay);stroke-width:1.4;opacity:.7;stroke-dasharray:3 6}
+.seal .petal{fill:var(--color-accent-soft);stroke:var(--color-accent);stroke-width:1.6}
+.seal .core{fill:var(--color-paper)}
+.seal .kanji{fill:var(--color-accent-ink);font-family:var(--font-display);font-weight:700;font-size:34px}
+@media(prefers-reduced-motion:no-preference){
+  .seal .ring{stroke-dasharray:760;stroke-dashoffset:760;animation:draw 2.4s var(--ease-out) .2s forwards}
+  .seal .rot{transform-box:fill-box;transform-origin:center;animation:spin 60s linear infinite}
+}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media(min-width:840px){
+  .hero-in{grid-template-columns:1.15fr .85fr}
+  .hero{padding-block:var(--space-3xl) var(--space-2xl)}
+}
+
+/* — section shell — */
+section{padding-block:var(--space-2xl)}
+.sec-head{max-width:40rem;margin-bottom:var(--space-xl)}
+.kicker{font-size:var(--text-sm);font-weight:700;color:var(--color-clay);letter-spacing:.14em;margin-bottom:var(--space-xs)}
+.sec-head h2{font-size:var(--text-3xl)}
+.sec-head p{color:var(--color-ink-soft);margin-top:var(--space-md);font-size:var(--text-lg)}
+.band{background:var(--color-paper-2);border-block:var(--rule) solid var(--color-line)}
+
+/* — problem cards — */
+.reality{display:grid;grid-template-columns:1fr;gap:var(--space-md)}
+.rcard{background:var(--color-paper);border:var(--rule) solid var(--color-line);border-radius:var(--radius-md);padding:var(--space-lg)}
+.rcard .rlabel{display:inline-block;font-size:var(--text-xs);font-weight:700;letter-spacing:.08em;color:var(--color-accent-ink);background:var(--color-accent-soft);padding:.3em .9em;border-radius:var(--radius-pill);margin-bottom:var(--space-sm)}
+.rcard h3{font-size:var(--text-xl);margin-bottom:var(--space-xs)}
+.rcard p{color:var(--color-ink-soft);font-size:var(--text-base)}
+@media(min-width:720px){.reality{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* — steps — */
+.steps{display:grid;grid-template-columns:1fr;gap:0}
+.step{display:grid;grid-template-columns:auto 1fr;gap:var(--space-md);padding-block:var(--space-lg);border-top:var(--rule) solid var(--color-line)}
+.step:last-child{border-bottom:var(--rule) solid var(--color-line)}
+.step .num{font-family:var(--font-display);font-weight:700;font-size:var(--text-2xl);color:var(--color-accent);line-height:1;width:2.4rem}
+.step h3{font-size:var(--text-xl);margin-bottom:var(--space-2xs)}
+.step p{color:var(--color-ink-soft)}
+@media(min-width:720px){
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:var(--space-xl)}
+  .step:nth-child(2){border-top:var(--rule) solid var(--color-line)}
+}
+
+/* — trust — */
+.trust{display:grid;grid-template-columns:1fr;gap:var(--space-md)}
+.tcard{padding:var(--space-lg);background:var(--color-paper);border:var(--rule) solid var(--color-line);border-radius:var(--radius-md)}
+.tcard .ico{width:2.4rem;height:2.4rem;display:grid;place-items:center;border-radius:var(--radius-sm);background:var(--color-accent-soft);color:var(--color-accent-ink);margin-bottom:var(--space-sm)}
+.tcard .ico svg{width:1.35rem;height:1.35rem}
+.tcard h3{font-size:var(--text-lg);margin-bottom:var(--space-2xs)}
+.tcard p{color:var(--color-ink-soft);font-size:var(--text-sm)}
+@media(min-width:720px){.trust{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:960px){.trust{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* — letter / omoi — */
+.letter{background:var(--color-paper);border:var(--rule) solid var(--color-line);border-radius:var(--radius-lg);padding:var(--space-xl)}
+.letter .kicker{color:var(--color-clay)}
+.letter h2{font-size:var(--text-2xl);margin-bottom:var(--space-md)}
+.letter p{color:var(--color-ink-soft);margin-bottom:var(--space-md);max-width:var(--measure)}
+.letter .sign{font-family:var(--font-display);color:var(--color-ink);font-size:var(--text-base);margin-top:var(--space-lg)}
+.letter .sign span{display:block;font-size:var(--text-sm);color:var(--color-ink-faint);font-family:var(--font-body)}
+
+/* — pricing philosophy — */
+.price{display:grid;grid-template-columns:1fr;gap:var(--space-lg);align-items:start}
+.price-now{background:var(--color-accent);color:var(--color-paper-on-accent);border-radius:var(--radius-lg);padding:var(--space-xl)}
+.price-now .kicker{color:oklch(90% 0.04 250)}
+.price-now h3{color:var(--color-paper-on-accent);font-size:var(--text-2xl);margin-bottom:var(--space-sm)}
+.price-now p{color:oklch(93% 0.02 250);margin-bottom:var(--space-md)}
+.price-now .btn{background:var(--color-paper);color:var(--color-accent-ink)}
+.price-now .btn:hover{background:var(--color-paper-2)}
+.price-later{padding:var(--space-xl);border:1.5px dashed var(--color-line);border-radius:var(--radius-lg)}
+.price-later h3{font-size:var(--text-xl);margin-bottom:var(--space-sm)}
+.price-later p{color:var(--color-ink-soft);margin-bottom:var(--space-sm)}
+.price-later .amt{font-family:var(--font-display);font-size:var(--text-2xl);color:var(--color-ink)}
+.price-later .amt small{font-size:var(--text-sm);color:var(--color-ink-faint);font-family:var(--font-body)}
+.price-later .pending{display:inline-block;font-size:var(--text-xs);color:var(--color-clay);border:var(--rule) solid var(--color-clay-soft);background:var(--color-clay-soft);padding:.25em .8em;border-radius:var(--radius-pill);margin-top:var(--space-sm)}
+@media(min-width:820px){.price{grid-template-columns:1.1fr .9fr}}
+
+/* — FAQ — */
+.faq details{border-bottom:var(--rule) solid var(--color-line)}
+.faq summary{list-style:none;cursor:pointer;padding-block:var(--space-md);font-family:var(--font-display);font-weight:600;font-size:var(--text-lg);display:flex;justify-content:space-between;gap:var(--space-md);align-items:center;transition:color .18s var(--ease-out)}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary:hover{color:var(--color-accent-ink)}
+.faq summary .pm{flex:0 0 auto;width:1.4rem;height:1.4rem;position:relative}
+.faq summary .pm::before,.faq summary .pm::after{content:"";position:absolute;background:var(--color-accent);border-radius:2px;transition:transform .22s var(--ease-in-out)}
+.faq summary .pm::before{top:50%;left:0;width:100%;height:2px;transform:translateY(-50%)}
+.faq summary .pm::after{left:50%;top:0;height:100%;width:2px;transform:translateX(-50%)}
+.faq details[open] summary .pm::after{transform:translateX(-50%) scaleY(0)}
+.faq details p{color:var(--color-ink-soft);padding-bottom:var(--space-md);max-width:var(--measure)}
+
+/* — closing CTA — */
+.close{text-align:center}
+.close h2{font-size:var(--text-4xl);margin-bottom:var(--space-md)}
+.close p{color:var(--color-ink-soft);font-size:var(--text-lg);max-width:36rem;margin-inline:auto;margin-bottom:var(--space-lg)}
+.signup{display:flex;flex-wrap:wrap;gap:var(--space-sm);justify-content:center;max-width:34rem;margin-inline:auto}
+.signup input{
+  flex:1 1 15rem;min-width:0;font-family:var(--font-body);font-size:var(--text-base);
+  padding:.85em 1.2em;border-radius:var(--radius-pill);
+  border:1.5px solid var(--color-line);background:var(--color-paper);color:var(--color-ink);
+  transition:border-color .18s var(--ease-out),box-shadow .18s var(--ease-out);
+}
+.signup input::placeholder{color:var(--color-ink-faint)}
+.signup input:hover{border-color:var(--color-ink-faint)}
+.signup input:focus-visible{outline:none;border-color:var(--color-accent);box-shadow:0 0 0 3px var(--color-accent-soft)}
+.signup .btn{flex:0 0 auto}
+.close .alt{margin-top:var(--space-md);font-size:var(--text-sm);color:var(--color-ink-faint)}
+.close .alt a{font-weight:500}
+
+/* — footer — */
+.foot{background:var(--color-ink);color:oklch(88% 0.01 80)}
+.foot-in{padding-block:var(--space-xl);display:grid;gap:var(--space-lg)}
+.foot .fmark{font-family:var(--font-display);font-weight:700;font-size:1.4rem;letter-spacing:.08em;color:var(--color-paper)}
+.foot .fmark b{color:oklch(75% 0.09 250)}
+.foot p{color:oklch(74% 0.012 80);font-size:var(--text-sm);max-width:30rem;margin-top:var(--space-xs)}
+.foot .flinks{display:flex;flex-wrap:wrap;gap:var(--space-md);font-size:var(--text-sm)}
+.foot .flinks a{color:oklch(85% 0.02 250);text-decoration:none}
+.foot .flinks a:hover{color:var(--color-paper);text-decoration:underline}
+.foot .fine{border-top:var(--rule) solid oklch(40% 0.01 80);padding-top:var(--space-md);font-size:var(--text-xs);color:oklch(66% 0.01 80);display:flex;flex-wrap:wrap;gap:var(--space-xs) var(--space-md);justify-content:space-between}
+
+/* — reveal — */
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .6s var(--ease-out),transform .6s var(--ease-out)}
+.reveal.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none;transition:none}
+  *{scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top" aria-label="AIMORI ホーム">
+      <span class="mark">AI<b>MORI</b></span>
+      <span class="tag">アイデアを守るAI</span>
+    </a>
+    <a class="btn btn-primary" href="#soudan">無料で相談する</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap hero-in">
+      <div>
+        <span class="eyebrow"><span class="dot"></span>イラスト・ハンドメイド・D2Cのための見守りサービス</span>
+        <h1>あなたの作品が、<br>知らないどこかで<br><span class="u">売られて</span>いませんか。</h1>
+        <p class="lead">生成AIや海外ECの広がりで、大切に育てた作品が、無断で使われたり真似されたりする被害が増えています。AIMORIは、あなたの作品をそっと見守り、似たものを見つけたらお知らせします。毎日ネットを見張る時間は、もう要りません。</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#scan">無料でスキャンを試す</a>
+          <a class="btn btn-ghost" href="#soudan">まずは相談してみる</a>
+        </div>
+        <p class="hero-note">登録も相談も無料。しつこい営業はしません。</p>
+      </div>
+
+      <div class="seal-wrap" aria-hidden="true">
+        <svg class="seal" viewBox="0 0 240 240" role="img">
+          <g class="rot">
+            <circle class="ring" cx="120" cy="120" r="104"/>
+            <circle class="ring2" cx="120" cy="120" r="90"/>
+          </g>
+          <!-- petals (守り紋) -->
+          <g>
+            <path class="petal" d="M120 44 C136 70 136 92 120 112 C104 92 104 70 120 44Z"/>
+            <path class="petal" d="M196 120 C170 136 148 136 128 120 C148 104 170 104 196 120Z"/>
+            <path class="petal" d="M120 196 C104 170 104 148 120 128 C136 148 136 170 120 196Z"/>
+            <path class="petal" d="M44 120 C70 104 92 104 112 120 C92 136 70 136 44 120Z"/>
+          </g>
+          <circle class="core" cx="120" cy="120" r="34" stroke="var(--color-accent)" stroke-width="2"/>
+          <text class="kanji" x="120" y="132" text-anchor="middle">守</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBLEM -->
+  <section class="band" id="problem">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="kicker">いま、起きていること</p>
+        <h2>「まさか自分が」と思っているうちに。</h2>
+        <p>被害は、特別な誰かにだけ起こるものではありません。作品を公開している人なら、誰にでも起こりうる、身近な出来事になりました。</p>
+      </div>
+      <div class="reality">
+        <div class="rcard reveal">
+          <span class="rlabel">生成AI</span>
+          <h3>少し変えて、コピー</h3>
+          <p>色や構図をわずかに変えただけの「そっくりな作品」が生成され、まるで自分の作風のように出回ってしまう。</p>
+        </div>
+        <div class="rcard reveal">
+          <span class="rlabel">海外EC</span>
+          <h3>勝手にグッズ化</h3>
+          <p>SHEINやTemuなどで、あなたの絵柄がそのままTシャツや雑貨として販売されている——という声が後を絶ちません。</p>
+        </div>
+        <div class="rcard reveal">
+          <span class="rlabel">国内フリマ・SNS</span>
+          <h3>画像ごと転載</h3>
+          <p>メルカリやSNS、詐欺サイトに、商品画像や説明文がそっくりそのまま無断で使われてしまう。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SOLUTION -->
+  <section id="how">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="kicker">AIMORIができること</p>
+        <h2>登録して、あとは見守るだけ。</h2>
+        <p>むずかしい設定はありません。作品を預けていただければ、AIが根気よくネットを巡回し、見つけたことをやさしくお知らせします。</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal"><div class="num">01</div><div><h3>作品を登録する</h3><p>守りたいイラストや商品画像を登録します。数点からでも大丈夫です。</p></div></div>
+        <div class="step reveal"><div class="num">02</div><div><h3>AIが巡回して見つける</h3><p>国内のフリマ・SNS・画像サイトから海外ECまで、似ているものを定期的に探します。少し変えられたコピーも見逃しにくいのが特長です。</p></div></div>
+        <div class="step reveal"><div class="num">03</div><div><h3>見つけたらお知らせ</h3><p>「どこで・どのくらい似ているか」を、画面のスクリーンショットとURL付きでお伝えします。</p></div></div>
+        <div class="step reveal"><div class="num">04</div><div><h3>削除のお願い文を用意</h3><p>相手やサイトに送るための「削除依頼テンプレート」を日本語でご用意。将来は英語・中国語にも対応予定です。</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRUST -->
+  <section class="band" id="trust">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="kicker">安心してお任せいただける理由</p>
+        <h2>作家さんの、となりに。</h2>
+      </div>
+      <div class="trust">
+        <div class="tcard reveal">
+          <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h18"/></svg></div>
+          <h3>日本のサイトに強い</h3>
+          <p>海外向けサービスが見ていない、国内のフリマやSNSまで見守ります。</p>
+        </div>
+        <div class="tcard reveal">
+          <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+          <h3>ぜんぶ日本語</h3>
+          <p>画面もサポートも日本語。専門用語は、わかる言葉に置きかえてお伝えします。</p>
+        </div>
+        <div class="tcard reveal">
+          <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <h3>見つけて終わりにしない</h3>
+          <p>「見つけた、で終わり」ではなく、次の一歩となる依頼文までご用意します。</p>
+        </div>
+        <div class="tcard reveal">
+          <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>料金は、明瞭に</h3>
+          <p>わかりにくい成功報酬ではなく、安心して続けられる料金を目指します。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OMOI (letter) -->
+  <section id="omoi">
+    <div class="wrap narrow">
+      <div class="letter reveal">
+        <p class="kicker">わたしたちの想い</p>
+        <h2>作品には、その人の時間が宿っています。</h2>
+        <p>ひとつの絵、ひとつの手仕事の裏には、何時間も、何年もの積み重ねがあります。それが、見ず知らずの誰かに勝手に使われてしまう。悔しさも、悲しさも、当事者にしかわからない重さがあると、わたしたちは考えています。</p>
+        <p>大企業向けの高額な監視サービスはあっても、個人の作家さんが、安心して頼れる場所はまだ多くありません。AIMORIは、その「すき間」を、作家さんの目線で埋めていきたい。まずは一人ひとりのご相談から、ていねいに向き合います。</p>
+        <p class="sign">AIMORI 運営チーム<span>※本ページは開発中サービスの案内です。掲載内容は今後変わる場合があります。</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="band" id="scan">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="kicker">料金の考え方</p>
+        <h2>まずは、無料で確かめてください。</h2>
+        <p>いきなり契約は必要ありません。「本当に見つかるの？」——その不安を、無料スキャンで先に解消していただけます。</p>
+      </div>
+      <div class="price">
+        <div class="price-now reveal">
+          <p class="kicker">いま、できること</p>
+          <h3>無料スキャン</h3>
+          <p>守りたい作品を送っていただければ、担当が実際にネットを調べ、似たものが見つかるかどうかの「被害チェック結果」を無料でお届けします。（現在は手作業でていねいに対応しています）</p>
+          <a class="btn" href="#soudan">無料スキャンを申し込む</a>
+        </div>
+        <div class="price-later reveal">
+          <h3>これからのこと</h3>
+          <p>継続して見守る月額プランを準備中です。個人の作家さんが無理なく続けられる価格を考えています。</p>
+          <p class="amt">月額 数千円<small> を予定</small></p>
+          <span class="pending">正式な料金は決定しだいご案内します</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="wrap narrow">
+      <div class="sec-head reveal">
+        <p class="kicker">よくあるご質問</p>
+        <h2>気になること、先にお答えします。</h2>
+      </div>
+      <div class="faq reveal">
+        <details><summary>登録した作品の画像は、安全に扱われますか？<span class="pm" aria-hidden="true"></span></summary><p>はい。お預かりした画像は、見守り（照合）の目的以外には使用しません。取り扱い方針は、正式リリース時に明文化してご案内します。</p></details>
+        <details><summary>絵を少しだけ変えられたコピーも見つけられますか？<span class="pm" aria-hidden="true"></span></summary><p>色や構図を変えた「似ているだけ」のものも見つけられるよう設計を進めています。完全一致だけを探す仕組みではありません。</p></details>
+        <details><summary>見つけたあと、削除まで代わりにやってくれますか？<span class="pm" aria-hidden="true"></span></summary><p>現在は、相手へ送る「削除のお願い文」のご用意までをお手伝いします。実際の送付・交渉はご本人に行っていただく形です（専門的な対応が必要な場合は、弁護士など専門家のご案内も検討しています）。</p></details>
+        <details><summary>イラスト以外、ハンドメイドや商品写真でも使えますか？<span class="pm" aria-hidden="true"></span></summary><p>はい。ハンドメイド作品やD2Cブランドの商品画像も対象です。まずはお気軽にご相談ください。</p></details>
+        <details><summary>費用はかかりますか？<span class="pm" aria-hidden="true"></span></summary><p>ご相談と無料スキャンは無料です。継続的な見守りは、今後の月額プランでのご提供を予定しています。</p></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLOSING CTA -->
+  <section id="soudan">
+    <div class="wrap narrow close reveal">
+      <h2>あなたの作品を、<br>見守らせてください。</h2>
+      <p>リリースのお知らせや、無料スキャンのご案内をお送りします。まずはメールアドレスをご登録ください。</p>
+      <!-- NOTE: 送信には別途フォーム連携（例：Google Form / Formspree / メール配信ツール）の設定が必要です -->
+      <form class="signup" action="#" method="post" onsubmit="return false;">
+        <label for="email" class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">メールアドレス</label>
+        <input id="email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+        <button class="btn btn-primary" type="submit">お知らせを受け取る</button>
+      </form>
+      <p class="alt">お急ぎの方・くわしく相談したい方は <a href="mailto:nujihiwtt@gmail.com?subject=AIMORI%20無料相談・無料スキャンの申し込み">メールで直接ご相談</a> ください。</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -->
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div>
+      <div class="fmark">AI<b>MORI</b></div>
+      <p>イラスト・ハンドメイド・D2Cの作品を、模倣から見守るサービス。作家さんのとなりで、静かに、しっかりと。</p>
+    </div>
+    <nav class="flinks" aria-label="フッター">
+      <a href="#how">できること</a>
+      <a href="#trust">安心の理由</a>
+      <a href="#scan">料金</a>
+      <a href="#faq">よくある質問</a>
+      <a href="#soudan">相談する</a>
+    </nav>
+    <div class="fine">
+      <span>© 2026 AIMORI</span>
+      <span>本ページは開発中サービスの案内です。</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Restrained reveal-on-scroll (respects reduced-motion via CSS)
+(function(){
+  var els = document.querySelectorAll('.reveal');
+  if(!('IntersectionObserver' in window)){els.forEach(function(e){e.classList.add('in')});return;}
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target);} });
+  },{threshold:.14, rootMargin:'0px 0px -8% 0px'});
+  els.forEach(function(e){io.observe(e)});
+})();
+</script>
+</body>
+</html>
