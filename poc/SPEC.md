@@ -34,16 +34,26 @@ poc/
 | `visuallySimilarImages` | 視覚的に類似した別画像のURL | **模倣品の検知**（別デザインだが見た目が似ているもの） |
 | `webEntities` | 画像の推定ラベル | 参考情報 |
 
-### 検知の2種類
+### 検知の3種類・2モード
 
 ```
+【デフォルトモード】ターゲットPFに絞った検知
+
 ① 転載・転売の検知
    pagesWithMatchingImages のURLがターゲットPFのドメインと一致
    → 🚨【要注意】ターゲットPFの掲載ページ として表示
 
-② 模倣品の検知（本番用途）
+② 模倣品の検知
    visuallySimilarImages のURLがターゲットPFのドメインと一致
    → ⚠️【模倣品候補】ターゲットPFで見つかった類似画像 として表示
+
+【--all モード】デザインパクリ検知（全サイト対象）
+
+③ デザインパクリの検知
+   visuallySimilarImages と pagesWithMatchingImages を全件表示
+   ターゲットPFにはタグを付与して識別
+   → 📄【掲載ページ一覧】全件（PFタグ付き）
+   → 🔍【類似画像一覧】全件 ← デザインパクリ候補
 ```
 
 ---
@@ -151,7 +161,17 @@ python3 reverse_search.py --url https://example.com/image.jpg
 
 # 混在
 python3 reverse_search.py image.jpg --url https://example.com/image.jpg
+
+# デザインパクリ検知（全サイトの類似画像を全件表示）
+python3 reverse_search.py --all image.jpg
 ```
+
+### オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `--url URL` | 画像URL指定（複数可）。ローカルファイルの代わりに使用 |
+| `--all` | ターゲットPFに限らず類似画像・掲載ページを全件表示（デザインパクリ検知用） |
 
 ### 環境変数
 
