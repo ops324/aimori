@@ -152,17 +152,27 @@ def analyze_one(api_key, label, image_source, save_name):
     out_path = OUT_DIR / f"{save_name}.web.json"
     out_path.write_text(json.dumps(web, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # ターゲットPFヒットを抽出（掲載ページURLを優先的にチェック）
-    flagged = []
+    # ターゲットPFヒットを抽出
+    # ① 掲載ページ（転載・転売 — 同一/部分一致画像が載っているページ）
+    flagged_pages = []
     for p in pages:
         url = p.get("url", "")
         m = match_platform(url)
         if m:
-            # そのページに完全一致/部分一致画像があるか
             has_full = bool(p.get("fullMatchingImages"))
             has_partial = bool(p.get("partialMatchingImages"))
             kind = "完全一致" if has_full else ("部分一致" if has_partial else "掲載")
-            flagged.append((m[0], url, kind, p.get("pageTitle", "")))
+            flagged_pages.append((m[0], url, kind, p.get("pageTitle", "")))
+
+    # ② 類似画像URL（模倣品検知 — 別画像だが視覚的に似ているものがターゲットPFにある）
+    flagged_similar = []
+    for img in similar:
+        url = img.get("url", "")
+        m = match_platform(url)
+        if m:
+            flagged_similar.append((m[0], url))
+
+    flagged_all = len(flagged_pages) + len(flagged_similar)
 
     # ---- 出力 ----
     print("=" * 70)
@@ -174,21 +184,28 @@ def analyze_one(api_key, label, image_source, save_name):
     print(f"  完全一致画像 (fullMatchingImages)    : {len(full)} 件")
     print(f"  部分一致画像 (partialMatchingImages) : {len(partial)} 件")
     print(f"  類似画像 (visuallySimilarImages)     : {len(similar)} 件")
-    print(f"  ★ ターゲットPFヒット                : {len(flagged)} 件")
+    print(f"  ★ ターゲットPFヒット合計            : {flagged_all} 件"
+          f"  （掲載ページ {len(flagged_pages)} 件 ／ 類似画像 {len(flagged_similar)} 件）")
 
     if entities:
         top = [e.get("description", "") for e in entities[:5] if e.get("description")]
         if top:
             print(f"  推定ラベル: {', '.join(top)}")
 
-    if flagged:
-        print("\n🚨【要注意】ターゲットPFでヒットした掲載ページ")
-        for pf, url, kind, title in flagged:
+    if flagged_pages:
+        print("\n🚨【要注意】ターゲットPFの掲載ページ（転載・転売の疑い）")
+        for pf, url, kind, title in flagged_pages:
             print(f"  ● [{pf}] ({kind}) {url}")
             if title:
                 print(f"      └ {title}")
-    else:
-        print("\n（ターゲットPFでの一致は見つかりませんでした）")
+
+    if flagged_similar:
+        print("\n⚠️ 【模倣品候補】ターゲットPFで見つかった類似画像")
+        for pf, url in flagged_similar:
+            print(f"  ● [{pf}] {url}")
+
+    if not flagged_pages and not flagged_similar:
+        print("\n（ターゲットPFでの一致・類似は見つかりませんでした）")
 
     other = [p for p in pages if not match_platform(p.get("url", ""))]
     if other:
