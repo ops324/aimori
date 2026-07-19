@@ -3,13 +3,17 @@
 AIMORI PoC — Google Vision API Web Detection による逆画像検索
 
 登録作品の画像を Google Vision API に渡し、ネット上のどこに同一・類似画像が
-掲載されているかを取得する。メルカリ・minne・Creema 等のターゲット
-プラットフォームでヒットしたページを「要注意」として抽出する。
+掲載されているかを取得する。
+
+検知モード:
+  デフォルト: メルカリ・minne・Creema 等のターゲットPFでのヒットを強調表示
+  --all     : ターゲットPFに限らず、類似画像・掲載ページを全件表示（デザインパクリ検知用）
 
 使い方:
     export GOOGLE_VISION_API_KEY=<your-key>
     python3 reverse_search.py path/to/image.jpg [image2.png ...]
     python3 reverse_search.py --url https://example.com/image.jpg
+    python3 reverse_search.py --all path/to/image.jpg   # デザインパクリ検知
 
 依存: 標準ライブラリのみ（pip install 不要）
 """
@@ -126,7 +130,7 @@ def _explain_http_error(code, detail):
     die(msg)
 
 
-def analyze_one(api_key, label, image_source, save_name):
+def analyze_one(api_key, label, image_source, save_name, show_all=False):
     """1画像を解析して結果を表示。生JSONを out/ に保存。"""
     body = build_request_body(image_source)
     result = call_vision_api(api_key, body)
@@ -192,26 +196,52 @@ def analyze_one(api_key, label, image_source, save_name):
         if top:
             print(f"  推定ラベル: {', '.join(top)}")
 
-    if flagged_pages:
-        print("\n🚨【要注意】ターゲットPFの掲載ページ（転載・転売の疑い）")
-        for pf, url, kind, title in flagged_pages:
-            print(f"  ● [{pf}] ({kind}) {url}")
-            if title:
-                print(f"      └ {title}")
+    if show_all:
+        # --all モード: デザインパクリ検知 — ターゲットPF問わず全件表示
+        if pages:
+            print(f"\n📄【掲載ページ一覧】全 {len(pages)} 件")
+            for p in pages:
+                url = p.get("url", "")
+                m = match_platform(url)
+                pf_tag = f" [{m[0]}]" if m else ""
+                title = p.get("pageTitle", "")
+                has_full = bool(p.get("fullMatchingImages"))
+                has_partial = bool(p.get("partialMatchingImages"))
+                kind = "完全一致" if has_full else ("部分一致" if has_partial else "掲載")
+                print(f"  ({kind}){pf_tag} {url}")
+                if title:
+                    print(f"      └ {title}")
 
-    if flagged_similar:
-        print("\n⚠️ 【模倣品候補】ターゲットPFで見つかった類似画像")
-        for pf, url in flagged_similar:
-            print(f"  ● [{pf}] {url}")
+        if similar:
+            print(f"\n🔍【類似画像一覧】全 {len(similar)} 件  ← デザインパクリ候補")
+            for img in similar:
+                url = img.get("url", "")
+                m = match_platform(url)
+                pf_tag = f" [{m[0]}]" if m else ""
+                print(f"  {pf_tag} {url}")
+    else:
+        # デフォルトモード: ターゲットPFのヒットのみ強調
+        if flagged_pages:
+            print("\n🚨【要注意】ターゲットPFの掲載ページ（転載・転売の疑い）")
+            for pf, url, kind, title in flagged_pages:
+                print(f"  ● [{pf}] ({kind}) {url}")
+                if title:
+                    print(f"      └ {title}")
 
-    if not flagged_pages and not flagged_similar:
-        print("\n（ターゲットPFでの一致・類似は見つかりませんでした）")
+        if flagged_similar:
+            print("\n⚠️ 【模倣品候補】ターゲットPFで見つかった類似画像")
+            for pf, url in flagged_similar:
+                print(f"  ● [{pf}] {url}")
 
-    other = [p for p in pages if not match_platform(p.get("url", ""))]
-    if other:
-        print(f"\n【参考】その他の掲載ページ (上位{min(10, len(other))}件)")
-        for p in other[:10]:
-            print(f"  - {p.get('url', '')}")
+        if not flagged_pages and not flagged_similar:
+            print("\n（ターゲットPFでの一致・類似は見つかりませんでした）")
+            print("  ヒント: --all オプションで全件の類似画像を確認できます")
+
+        other = [p for p in pages if not match_platform(p.get("url", ""))]
+        if other:
+            print(f"\n【参考】その他の掲載ページ (上位{min(10, len(other))}件)")
+            for p in other[:10]:
+                print(f"  - {p.get('url', '')}")
 
     print(f"\n生レスポンス保存先: {out_path}")
     print()
@@ -244,6 +274,8 @@ def main():
     parser.add_argument("images", nargs="*", help="ローカル画像ファイルのパス（複数可）")
     parser.add_argument("--url", action="append", default=[],
                         help="画像のURL（複数指定可）。ローカルファイルの代わりに使用")
+    parser.add_argument("--all", action="store_true", dest="show_all",
+                        help="ターゲットPFに限らず類似画像・掲載ページを全件表示（デザインパクリ検知用）")
     args = parser.parse_args()
 
     if not args.images and not args.url:
@@ -254,11 +286,11 @@ def main():
 
     for path_str in args.images:
         src = load_local_image(path_str)
-        analyze_one(api_key, path_str, src, safe_name(Path(path_str).name))
+        analyze_one(api_key, path_str, src, safe_name(Path(path_str).name), show_all=args.show_all)
 
     for url in args.url:
         src = {"source": {"imageUri": url}}
-        analyze_one(api_key, f"URL: {url}", src, safe_name(Path(urlparse(url).path).name or "url"))
+        analyze_one(api_key, f"URL: {url}", src, safe_name(Path(urlparse(url).path).name or "url"), show_all=args.show_all)
 
 
 if __name__ == "__main__":
