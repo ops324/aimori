@@ -55,6 +55,10 @@ def die(msg, code=1):
     sys.exit(code)
 
 
+class VisionAPIError(Exception):
+    """Vision API 呼び出し失敗（HTTP/ネットワーク/レスポンス内エラー）。message は die() にそのまま渡せる形式。"""
+
+
 def get_api_key():
     key = os.environ.get("GOOGLE_VISION_API_KEY", "").strip()
     if not key:
@@ -109,9 +113,9 @@ def call_vision_api(api_key, body):
             detail = e.read().decode("utf-8")
         except Exception:
             pass
-        _explain_http_error(e.code, detail)
+        raise VisionAPIError(_explain_http_error(e.code, detail))
     except urllib.error.URLError as e:
-        die(f"ネットワークエラー: {e.reason}")
+        raise VisionAPIError(f"ネットワークエラー: {e.reason}")
 
 
 def _explain_http_error(code, detail):
@@ -127,34 +131,16 @@ def _explain_http_error(code, detail):
     msg = f"APIエラー (HTTP {code}): {hint}"
     if detail:
         msg += f"\n--- APIからの詳細 ---\n{detail}"
-    die(msg)
+    return msg
 
 
-def analyze_one(api_key, label, image_source, save_name, show_all=False):
-    """1画像を解析して結果を表示。生JSONを out/ に保存。"""
-    body = build_request_body(image_source)
-    result = call_vision_api(api_key, body)
-
-    responses = result.get("responses", [{}])
-    resp0 = responses[0] if responses else {}
-
-    # APIがレスポンス単位でエラーを返す場合
-    if "error" in resp0:
-        err = resp0["error"]
-        die(f"APIエラー: {err.get('message', err)}")
-
-    web = resp0.get("webDetection", {})
-
+def summarize_web_detection(web):
+    """webDetection dict を分類済みサマリ dict に変換。API呼び出し・I/Oなしの純粋関数。"""
     pages = web.get("pagesWithMatchingImages", []) or []
     full = web.get("fullMatchingImages", []) or []
     partial = web.get("partialMatchingImages", []) or []
     similar = web.get("visuallySimilarImages", []) or []
     entities = web.get("webEntities", []) or []
-
-    # 生JSONを保存
-    OUT_DIR.mkdir(exist_ok=True)
-    out_path = OUT_DIR / f"{save_name}.web.json"
-    out_path.write_text(json.dumps(web, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # ターゲットPFヒットを抽出
     # ① 掲載ページ（転載・転売 — 同一/部分一致画像が載っているページ）
@@ -176,7 +162,50 @@ def analyze_one(api_key, label, image_source, save_name, show_all=False):
         if m:
             flagged_similar.append((m[0], url))
 
-    flagged_all = len(flagged_pages) + len(flagged_similar)
+    other_pages = [p for p in pages if not match_platform(p.get("url", ""))]
+
+    return {
+        "pages": pages,
+        "full": full,
+        "partial": partial,
+        "similar": similar,
+        "entities": entities,
+        "flagged_pages": flagged_pages,
+        "flagged_similar": flagged_similar,
+        "flagged_all": len(flagged_pages) + len(flagged_similar),
+        "other_pages": other_pages,
+    }
+
+
+def analyze_one(api_key, label, image_source, save_name, show_all=False):
+    """1画像を解析して結果を表示。生JSONを out/ に保存。"""
+    body = build_request_body(image_source)
+    result = call_vision_api(api_key, body)
+
+    responses = result.get("responses", [{}])
+    resp0 = responses[0] if responses else {}
+
+    # APIがレスポンス単位でエラーを返す場合
+    if "error" in resp0:
+        err = resp0["error"]
+        raise VisionAPIError(f"APIエラー: {err.get('message', err)}")
+
+    web = resp0.get("webDetection", {})
+
+    # 生JSONを保存
+    OUT_DIR.mkdir(exist_ok=True)
+    out_path = OUT_DIR / f"{save_name}.web.json"
+    out_path.write_text(json.dumps(web, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    summary = summarize_web_detection(web)
+    pages = summary["pages"]
+    full = summary["full"]
+    partial = summary["partial"]
+    similar = summary["similar"]
+    entities = summary["entities"]
+    flagged_pages = summary["flagged_pages"]
+    flagged_similar = summary["flagged_similar"]
+    flagged_all = summary["flagged_all"]
 
     # ---- 出力 ----
     print("=" * 70)
@@ -284,13 +313,16 @@ def main():
 
     api_key = get_api_key()
 
-    for path_str in args.images:
-        src = load_local_image(path_str)
-        analyze_one(api_key, path_str, src, safe_name(Path(path_str).name), show_all=args.show_all)
+    try:
+        for path_str in args.images:
+            src = load_local_image(path_str)
+            analyze_one(api_key, path_str, src, safe_name(Path(path_str).name), show_all=args.show_all)
 
-    for url in args.url:
-        src = {"source": {"imageUri": url}}
-        analyze_one(api_key, f"URL: {url}", src, safe_name(Path(urlparse(url).path).name or "url"), show_all=args.show_all)
+        for url in args.url:
+            src = {"source": {"imageUri": url}}
+            analyze_one(api_key, f"URL: {url}", src, safe_name(Path(urlparse(url).path).name or "url"), show_all=args.show_all)
+    except VisionAPIError as e:
+        die(str(e))
 
 
 if __name__ == "__main__":
