@@ -268,11 +268,17 @@ def scan():
     out_path = WEBAPP_OUT_DIR / f"{sname}.web.json"
     out_path.write_text(json.dumps(web, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    try:
+        out_path_display = str(out_path.relative_to(_HERE))
+    except ValueError:
+        # Vercel環境では WEBAPP_OUT_DIR が /tmp 配下になり、_HERE のサブパスにならない。
+        out_path_display = str(out_path)
+
     return render_template_string(
         RESULT_TMPL,
         filename=f.filename,
         summary=summary,
-        out_path=str(out_path.relative_to(_HERE)),
+        out_path=out_path_display,
     )
 
 
