@@ -88,7 +88,7 @@ FORM_TMPL = """
 <p class="note">画像を1枚アップロードすると、Google Vision API で
 ターゲットPF（メルカリ・minne等）での転載・模倣品候補を確認できます。
 このツールはローカル/内部利用専用です。</p>
-<form method="POST" action="/scan" enctype="multipart/form-data">
+<form method="POST" action="scan" enctype="multipart/form-data">
   <input type="file" name="image" accept="image/*" required>
   <input type="submit" value="検索する">
 </form>
@@ -174,7 +174,7 @@ RESULT_TMPL = """
 {% endif %}
 
 <p class="note">生レスポンス保存先: {{ out_path }}</p>
-<a class="back" href="/">← 別の画像を検索する</a>
+<a class="back" href=".">← 別の画像を検索する</a>
 </body>
 </html>
 """
@@ -186,7 +186,7 @@ ERROR_TMPL = """
 <body style="font-family: sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px;">
 <h1>エラー</h1>
 <p>{{ message }}</p>
-<a href="/">← 戻る</a>
+<a href=".">← 戻る</a>
 </body>
 </html>
 """
@@ -222,12 +222,16 @@ def handle_too_large(_e):
     ), 413
 
 
+# "/poc/" 系はVercel本番で /poc 配下にマウントするためのエイリアス（vercel.json参照）。
+# テンプレート内リンクは相対パスなので、"/" と "/poc/" のどちらでアクセスしても機能する。
 @app.route("/")
+@app.route("/poc/")
 def index():
     return render_template_string(FORM_TMPL)
 
 
 @app.route("/scan", methods=["POST"])
+@app.route("/poc/scan", methods=["POST"])
 def scan():
     f = request.files.get("image")
     if f is None or f.filename == "":
