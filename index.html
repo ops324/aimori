@@ -234,17 +234,6 @@ section{padding-block:var(--space-2xl)}
 .close{text-align:center}
 .close h2{font-size:var(--text-4xl);margin-bottom:var(--space-md)}
 .close p{color:var(--color-ink-soft);font-size:var(--text-lg);max-width:36rem;margin-inline:auto;margin-bottom:var(--space-lg)}
-.signup{display:flex;flex-wrap:wrap;gap:var(--space-sm);justify-content:center;max-width:34rem;margin-inline:auto}
-.signup input{
-  flex:1 1 15rem;min-width:0;font-family:var(--font-body);font-size:var(--text-base);
-  padding:.85em 1.2em;border-radius:var(--radius-pill);
-  border:1.5px solid var(--color-line);background:var(--color-paper);color:var(--color-ink);
-  transition:border-color .18s var(--ease-out),box-shadow .18s var(--ease-out);
-}
-.signup input::placeholder{color:var(--color-ink-faint)}
-.signup input:hover{border-color:var(--color-ink-faint)}
-.signup input:focus-visible{outline:none;border-color:var(--color-accent);box-shadow:0 0 0 3px var(--color-accent-soft)}
-.signup .btn{flex:0 0 auto}
 .close .alt{margin-top:var(--space-md);font-size:var(--text-sm);color:var(--color-ink-faint)}
 .close .alt a{font-weight:500}
 
@@ -453,14 +442,9 @@ section{padding-block:var(--space-2xl)}
   <section id="soudan">
     <div class="wrap narrow close reveal">
       <h2>あなたの作品を、<br>見守らせてください。</h2>
-      <p>リリースのお知らせや、無料スキャンのご案内をお送りします。まずはメールアドレスをご登録ください。</p>
-      <!-- NOTE: 送信には別途フォーム連携（例：Google Form / Formspree / メール配信ツール）の設定が必要です -->
-      <form class="signup" action="#" method="post" onsubmit="return false;">
-        <label for="email" class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">メールアドレス</label>
-        <input id="email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
-        <button class="btn btn-primary" type="submit">お知らせを受け取る</button>
-      </form>
-      <p class="alt">お急ぎの方・くわしく相談したい方は <a href="mailto:nujihiwtt@gmail.com?subject=AIMORI%20無料相談・無料スキャンの申し込み">メールで直接ご相談</a> ください。</p>
+      <p>無料スキャンのご相談・お申し込みは、メールで承っています。</p>
+      <a class="btn btn-primary" href="mailto:contact@flowmate.jp?subject=AIMORI%20無料相談・無料スキャンの申し込み">メールで相談する</a>
+      <p class="alt">お急ぎの方・くわしく相談したい方は <a href="mailto:contact@flowmate.jp?subject=AIMORI%20無料相談・無料スキャンの申し込み">メールで直接ご相談</a> ください。</p>
     </div>
   </section>
 
