@@ -73,6 +73,7 @@ FORM_TMPL = """
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AIMORI PoC — 画像検索</title>
 <style>
   body { font-family: sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
@@ -100,6 +101,7 @@ RESULT_TMPL = """
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>検索結果 — {{ filename }}</title>
 <style>
   body { font-family: sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
@@ -180,7 +182,7 @@ RESULT_TMPL = """
 ERROR_TMPL = """
 <!doctype html>
 <html lang="ja">
-<head><meta charset="utf-8"><title>エラー</title></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>エラー</title></head>
 <body style="font-family: sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px;">
 <h1>エラー</h1>
 <p>{{ message }}</p>
