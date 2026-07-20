@@ -82,6 +82,8 @@
 poc/
 ├── reverse_search.py   # CLI スクリプト（標準ライブラリのみ・pip install不要）
 ├── batch_verify.py     # バッチ検証スクリプト（複数画像を一括検証・集計レポート生成）
+├── webapp.py            # Webアプリ版（ブラウザから1枚アップロード→結果表示、Flask使用）
+├── requirements.txt     # webapp.py用の依存（Flaskのみ。他は標準ライブラリのみ）
 ├── README.md           # セットアップ・検証手順
 └── .gitignore          # 生レスポンス(out/)を除外
 ```
@@ -92,7 +94,10 @@ poc/
 - 生JSONレスポンスの `out/` への保存
 - バッチ検証スクリプト（`batch_verify.py`）実装完了。複数の作品画像をまとめて検索し、
   PF別ヒット率・ページヒット（強シグナル）/類似のみヒット（弱シグナル）を
-  `VERIFICATION_SUMMARY.md` に自動集計。実際の作品画像での本番検証はこれから実施
+  `VERIFICATION_SUMMARY.md` に自動集計。実際の作品画像（`book.jpg`）での本番検証を実施し、
+  ターゲットPFヒット0件（Amazon商品画像との完全一致・書影との類似のみ）を確認
+- ブラウザから1枚アップロードして結果を確認できる軽量Webアプリ（`webapp.py`）を追加。
+  ローカル/内部利用専用（フェーズ2の本格Webアプリとは別物）
 
 ### ターゲットプラットフォーム（PoC実装済み）
 
