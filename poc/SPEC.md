@@ -237,7 +237,7 @@ python3 reverse_search.py --all image.jpg
 
 ## バッチ検証（`batch_verify.py`）
 
-`reverse_search.py` を単独では実施しにくい「複数画像をまとめて検証し、ヒット率を定量把握する」ために追加したスクリプト。`reverse_search.py` 自体には変更を加えず、その純粋関数（`match_platform` / `TARGET_PLATFORMS` / `safe_name` / `OUT_DIR` / `get_api_key`）を再利用する。
+`reverse_search.py` を単独では実施しにくい「複数画像をまとめて検証し、ヒット率を定量把握する」ために追加したスクリプト。`reverse_search.py` 自体には変更を加えず、その純粋関数（`summarize_web_detection` / `platform_hit_breakdown` / `TARGET_PLATFORMS` / `safe_name` / `OUT_DIR` / `get_api_key`）を再利用する。分類ロジック自体は `build_result_from_web()` で再実装せず、`summarize_web_detection()` / `platform_hit_breakdown()` に委譲する薄いラッパーとして実装している。
 
 ### 使い方
 
