@@ -117,10 +117,24 @@ python3 poc/webapp.py
 
 ### 注意事項
 
-- **ローカル/内部利用専用です。** `127.0.0.1` 以外にバインドしないでください（APIキーはこのプロセス内にのみ存在し、外部公開する理由がありません）。
+- **ローカル実行時は無認証です。** `127.0.0.1` へのアクセスのみを想定しています。
 - 同じ `GOOGLE_VISION_API_KEY` を使用し、起動時に1回だけ存在チェックします（未設定なら起動しません）。
 - 結果の生JSONは `poc/out/webapp/` に保存されます（CLI/バッチのキャッシュ `poc/out/*.web.json` とは別ディレクトリで、互いに衝突しません）。`poc/out/` は `.gitignore` 済みです。
 - アップロードは画像ファイルの拡張子のみで簡易検査しています（内容の検証はしていません）。単一ユーザーのローカル確認用途を想定しており、本番運用のセキュリティ要件は満たしません。
+
+### Vercelへの公開（デモ・内部確認用）
+
+社内での動作確認・デモのため、Vercelにも公開できます。プロジェクトルートの `vercel.json` を使用します。
+
+```bash
+vercel env add GOOGLE_VISION_API_KEY production
+vercel env add WEBAPP_USER production   # Basic Auth用ユーザー名
+vercel env add WEBAPP_PASS production   # Basic Auth用パスワード
+vercel deploy --prod
+```
+
+- `WEBAPP_USER` / `WEBAPP_PASS` を設定すると、アクセス時にHTTP Basic認証が要求されます。**この2つを設定せずに公開しないでください**（誰でもアクセスでき、APIキーのクォータを消費されます）。
+- Vercel環境では結果JSONの保存先が `/tmp`（エフェメラル）に切り替わります。永続的な記録が必要な場合はローカル実行を使用してください。
 
 ---
 
