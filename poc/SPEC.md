@@ -12,12 +12,16 @@ Google Vision API の Web Detection を使い、登録作品の**転載（同一
 
 ```
 poc/
-├── reverse_search.py   # メインスクリプト
+├── reverse_search.py   # メインスクリプト（単一/複数画像の検索）
+├── batch_verify.py     # バッチ検証スクリプト（ディレクトリ一括検証・集計レポート）
 ├── README.md           # セットアップ・実行手順
 ├── SPEC.md             # 本ファイル（技術仕様）
 ├── .gitignore
 └── out/                # 生レスポンス保存先（gitignore済み）
-    └── <画像名>.web.json
+    ├── <画像名>.web.json         # Vision API 生レスポンス
+    ├── <画像名>.web.json.meta    # キャッシュ検証用 SHA1 サイドカー（batch_verify.py が生成）
+    ├── VERIFICATION_SUMMARY.md   # batch_verify.py が生成する検証レポート
+    └── .batch_checkpoint.<PID>.jsonl  # 実行中の一時チェックポイント（正常終了時は削除）
 ```
 
 ---
@@ -204,6 +208,50 @@ python3 reverse_search.py --all image.jpg
 | インデックスされていないページは検知不可 | 非公開出品・新着出品は未インデックスのことがある | 定期スキャンで経時的に拾う |
 | 改変画像の検知限界 | 大幅な色変更・反転・コラージュは `visuallySimilarImages` でも見逃す場合がある | フェーズ2でCLIP二次判定を追加（予定）|
 | 画像サイズ上限 | base64エンコード後20MB超はAPIエラー | 4MB超で警告を表示、リサイズを案内 |
+
+---
+
+## バッチ検証（`batch_verify.py`）
+
+`reverse_search.py` を単独では実施しにくい「複数画像をまとめて検証し、ヒット率を定量把握する」ために追加したスクリプト。`reverse_search.py` 自体には変更を加えず、その純粋関数（`match_platform` / `TARGET_PLATFORMS` / `safe_name` / `OUT_DIR` / `get_api_key`）を再利用する。
+
+### 使い方
+
+```bash
+export GOOGLE_VISION_API_KEY=<your-key>
+python3 poc/batch_verify.py ./test_images/
+python3 poc/batch_verify.py ./test_images/ --force            # キャッシュ無視で再処理
+python3 poc/batch_verify.py ./test_images/ --delay 2          # API呼び出し間隔（秒、デフォルト1）
+python3 poc/batch_verify.py ./test_images/ --max 20           # 最大処理枚数
+python3 poc/batch_verify.py ./test_images/ --output PATH      # レポート出力先
+python3 poc/batch_verify.py ./test_images/ --yes              # コスト確認プロンプトをスキップ
+```
+
+### キャッシュ機構
+
+`safe_name()` はファイル名の非可逆変換のため、異なる画像が同じキャッシュキーになる可能性がある。これに対応するため:
+
+- 各 `.web.json` に対して `.web.json.meta`（元画像の SHA1 と サイズ）をサイドカーとして保存
+- 実行時に SHA1 を再計算し、一致すればキャッシュ利用・不一致なら警告を出して新規 API 呼び出し
+- サイドカーの無い旧形式の `.web.json`（`reverse_search.py` を単体実行して作られたもの）は valid cache として扱い、その場でサイドカーを生成する
+- 同一バッチ内で `safe_name` が衝突するファイル名の組み合わせがあれば、`--force` の有無に関わらず即エラー終了する
+
+### レート制限対策
+
+Vision API の 429（レート制限・無料枠超過）を検知した時点でバッチ全体を中断し、それまでの結果でレポートを生成する。API呼び出し間には `--delay`（デフォルト1秒）のウェイトを挟む。
+
+### 集計指標
+
+| 指標 | 意味 |
+|------|------|
+| ページヒット（`has_page_hit`） | 転載・転売の強シグナル。`pagesWithMatchingImages` がターゲットPFに存在 |
+| 類似のみヒット（`has_similar_only_hit`） | 模倣品候補の弱シグナル。ページヒットが無く `visuallySimilarImages` のみターゲットPFに存在（排他的） |
+
+URLの重複排除は2階層で行う: 画像内（同一URLが掲載ページと類似画像の両方に出現する場合）と画像間（PF別サマリのUnique URL数）。
+
+### 出力
+
+`poc/out/VERIFICATION_SUMMARY.md`（デフォルト、gitignore済み）に集計結果・PF別ヒット数・画像別詳細・要注意URL一覧を Markdown で出力する。レポートには第三者サイトのURLが含まれるため、共有する場合は内容を確認した上で個別に取り出す。
 
 ---
 
