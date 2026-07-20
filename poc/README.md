@@ -125,6 +125,9 @@ python3 poc/webapp.py
 ### Vercelへの公開（デモ・内部確認用）
 
 社内での動作確認・デモのため、Vercelにも公開できます。プロジェクトルートの `vercel.json` を使用します。
+`vercel.json` はルート直下の公開LP（`index.html`）を `/` に、この`webapp.py`を `/poc` 配下に
+分離してルーティングするため、本番URLでは `https://<ドメイン>/poc` からアクセスします
+（ローカルでは従来通り `http://127.0.0.1:5000/` のままで動作します）。
 
 ```bash
 vercel env add GOOGLE_VISION_API_KEY production
