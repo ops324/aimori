@@ -41,8 +41,9 @@ from reverse_search import (  # noqa: E402
     OUT_DIR,
     TARGET_PLATFORMS,
     get_api_key,
-    match_platform,
+    platform_hit_breakdown,
     safe_name,
+    summarize_web_detection,
 )
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
@@ -174,69 +175,28 @@ def parse_web_json(sname):
 
 
 def build_result_from_web(image_path, sname, status, web):
-    """webDetection dict から result dict を構築。"""
-    pages = web.get("pagesWithMatchingImages", []) or []
-    full = web.get("fullMatchingImages", []) or []
-    partial = web.get("partialMatchingImages", []) or []
-    similar = web.get("visuallySimilarImages", []) or []
-    best_labels = web.get("bestGuessLabels", []) or []
-
-    best_guess = None
-    if best_labels:
-        best_guess = best_labels[0].get("label") or None
-
-    # PF別ヒットの抽出（ページ）
-    platform_page_hits = {pf: [] for pf in TARGET_PLATFORMS}
-    for p in pages:
-        url = p.get("url", "")
-        m = match_platform(url)
-        if not m:
-            continue
-        has_full = bool(p.get("fullMatchingImages"))
-        has_partial = bool(p.get("partialMatchingImages"))
-        kind = "完全一致" if has_full else ("部分一致" if has_partial else "掲載")
-        platform_page_hits[m[0]].append({
-            "url": url,
-            "kind": kind,
-            "title": p.get("pageTitle", "") or "",
-        })
-
-    # PF別ヒットの抽出（類似画像）
-    platform_similar_hits = {pf: [] for pf in TARGET_PLATFORMS}
-    for img in similar:
-        url = img.get("url", "")
-        m = match_platform(url)
-        if not m:
-            continue
-        platform_similar_hits[m[0]].append({"url": url})
-
-    # 画像内 URL 重複排除で target_url_count 計算
-    target_urls_in_image = set()
-    for pf in TARGET_PLATFORMS:
-        for h in platform_page_hits[pf]:
-            target_urls_in_image.add(h["url"])
-        for h in platform_similar_hits[pf]:
-            target_urls_in_image.add(h["url"])
-
-    has_page_hit = any(platform_page_hits[pf] for pf in TARGET_PLATFORMS)
-    has_similar_only_hit = (
-        any(platform_similar_hits[pf] for pf in TARGET_PLATFORMS) and not has_page_hit
-    )
+    """webDetection dict から result dict を構築。分類は reverse_search.py の
+    summarize_web_detection() / platform_hit_breakdown() に委譲し、ここでは
+    呼び出し単位のメタデータ（filename, status 等）を付与する薄いラッパーに留める。"""
+    summary = summarize_web_detection(web)
+    breakdown = platform_hit_breakdown(summary)
 
     return {
         "filename": image_path.name,
         "save_name": sname,
         "status": status,
-        "best_guess": best_guess,
-        "pages_total": len(pages),
-        "full_total": len(full),
-        "partial_total": len(partial),
-        "similar_total": len(similar),
-        "platform_page_hits": platform_page_hits,
-        "platform_similar_hits": platform_similar_hits,
-        "has_page_hit": has_page_hit,
-        "has_similar_only_hit": has_similar_only_hit,
-        "target_url_count": len(target_urls_in_image),
+        "best_guess": summary["best_guess"],
+        "pages_total": len(summary["pages"]),
+        "full_total": len(summary["full"]),
+        "partial_total": len(summary["partial"]),
+        "similar_total": len(summary["similar"]),
+        "platform_page_hits": breakdown["platform_page_hits"],
+        "platform_direct_hits": breakdown["platform_direct_hits"],
+        "platform_similar_hits": breakdown["platform_similar_hits"],
+        "has_page_hit": breakdown["has_page_hit"],
+        "has_direct_hit": breakdown["has_direct_hit"],
+        "has_similar_only_hit": breakdown["has_similar_only_hit"],
+        "target_url_count": breakdown["target_url_count"],
         "error": None,
     }
 
@@ -252,8 +212,10 @@ def failure_result(image_path, sname, error_msg):
         "partial_total": 0,
         "similar_total": 0,
         "platform_page_hits": {pf: [] for pf in TARGET_PLATFORMS},
+        "platform_direct_hits": {pf: [] for pf in TARGET_PLATFORMS},
         "platform_similar_hits": {pf: [] for pf in TARGET_PLATFORMS},
         "has_page_hit": False,
+        "has_direct_hit": False,
         "has_similar_only_hit": False,
         "target_url_count": 0,
         "error": error_msg,
@@ -283,8 +245,10 @@ def run_subprocess_for(image_path):
         return True, None, False
 
     stderr = (proc.stderr or "").strip()
-    # 429 検知（reverse_search.py:127 の実出力フォーマットに厳密一致）
-    rate_limited = "APIエラー (HTTP 429)" in stderr
+    # 429/クォータ超過検知（reverse_search.py の _explain_http_error()・explain_response_error()
+    # が生成する実出力フォーマットに厳密一致。HTTP 429 経由と、HTTP 200 + レスポンス内
+    # error でクォータ超過が返るケースの両方を拾う）
+    rate_limited = "APIエラー (HTTP 429)" in stderr or "APIエラー (クォータ超過)" in stderr
     return False, stderr or "不明なエラー", rate_limited
 
 
@@ -308,7 +272,11 @@ def print_progress(idx, total, image_path, action_tag, result):
 
     hits = []
     for pf in TARGET_PLATFORMS:
-        c = len(result["platform_page_hits"][pf]) + len(result["platform_similar_hits"][pf])
+        c = (
+            len(result["platform_page_hits"][pf])
+            + len(result["platform_direct_hits"][pf])
+            + len(result["platform_similar_hits"][pf])
+        )
         if c > 0:
             hits.append(f"{pf}×{c}")
     hit_str = ", ".join(hits) if hits else "PFヒット無し"
@@ -334,6 +302,8 @@ def aggregate(results):
 
     api_hit = [r for r in processed if r["pages_total"] > 0]
     page_hit = [r for r in processed if r["has_page_hit"]]
+    direct_hit = [r for r in processed if r["has_direct_hit"]]
+    strong_signal = [r for r in processed if r["has_page_hit"] or r["has_direct_hit"]]
     similar_only_hit = [r for r in processed if r["has_similar_only_hit"]]
     full_match_images = [r for r in processed if r["full_total"] > 0]
 
@@ -343,10 +313,13 @@ def aggregate(results):
         unique_urls = set()
         for r in processed:
             page = r["platform_page_hits"][pf]
+            direct = r["platform_direct_hits"][pf]
             sim = r["platform_similar_hits"][pf]
-            if page or sim:
+            if page or direct or sim:
                 images_with_hit += 1
             for h in page:
+                unique_urls.add(h["url"])
+            for h in direct:
                 unique_urls.add(h["url"])
             for h in sim:
                 unique_urls.add(h["url"])
@@ -362,6 +335,8 @@ def aggregate(results):
         "failed": len(failed),
         "api_hit_count": len(api_hit),
         "page_hit_count": len(page_hit),
+        "direct_hit_count": len(direct_hit),
+        "strong_signal_count": len(strong_signal),
         "similar_only_hit_count": len(similar_only_hit),
         "full_match_image_count": len(full_match_images),
         "per_platform": per_platform,
@@ -398,8 +373,16 @@ def generate_report(results, stats, dir_path, run_at):
         f"{stats['api_hit_count']}/{denom} ({percent(stats['api_hit_count'], denom)}) |"
     )
     lines.append(
-        f"| ターゲットPF ページヒット率（強シグナル・転載/転売） | "
+        f"| ターゲットPF ページヒット率（転載/転売・ページ掲載あり） | "
         f"{stats['page_hit_count']}/{denom} ({percent(stats['page_hit_count'], denom)}) |"
+    )
+    lines.append(
+        f"| 強シグナル合算（ページ+直接一致、重複除去） | "
+        f"{stats['strong_signal_count']}/{denom} ({percent(stats['strong_signal_count'], denom)}) |"
+    )
+    lines.append(
+        f"| 直接一致あり画像数（画像自体が完全/部分一致。ページヒットの有無は問わない） | "
+        f"{stats['direct_hit_count']}/{denom} ({percent(stats['direct_hit_count'], denom)}) |"
     )
     lines.append(
         f"| ターゲットPF 類似のみヒット率（模倣品候補） | "
@@ -407,7 +390,7 @@ def generate_report(results, stats, dir_path, run_at):
         f"({percent(stats['similar_only_hit_count'], denom)}) |"
     )
     lines.append(
-        f"| 完全一致検出画像数 | {stats['full_match_image_count']}/{denom} "
+        f"| 完全一致検出画像数（PF非依存） | {stats['full_match_image_count']}/{denom} "
         f"({percent(stats['full_match_image_count'], denom)}) |"
     )
     lines.append("")
@@ -421,6 +404,11 @@ def generate_report(results, stats, dir_path, run_at):
         lines.append(
             f"| {pf} | {info['image_count']} | {info['unique_url_count']} | {rate} |"
         )
+    lines.append("")
+    lines.append(
+        "※ 上記件数はページ掲載・直接一致（画像自体の完全/部分一致）・類似画像の合算です。"
+        "強弱の内訳はサマリ表・要注意URL一覧を参照してください。"
+    )
     lines.append("")
 
     lines.append("## 画像別詳細")
@@ -440,11 +428,17 @@ def generate_report(results, stats, dir_path, run_at):
     lines.append("## 要注意URL一覧（手動確認用）")
     lines.append("")
     any_hits = False
-    kind_icon = {"完全一致": "🔴", "部分一致": "🟡", "掲載": "🔵"}
+    kind_icon = {
+        "完全一致": "🔴",
+        "部分一致": "🟡",
+        "掲載": "🔵",
+        "画像直接:完全一致": "🟠",
+        "画像直接:部分一致": "🟤",
+    }
     for r in results:
         if r["status"] == "failed":
             continue
-        if not (r["has_page_hit"] or r["has_similar_only_hit"]):
+        if not (r["has_page_hit"] or r["has_direct_hit"] or r["has_similar_only_hit"]):
             continue
         any_hits = True
         lines.append(f"### {r['filename']}")
@@ -454,6 +448,9 @@ def generate_report(results, stats, dir_path, run_at):
                 icon = kind_icon.get(h["kind"], "")
                 title = f" — {h['title']}" if h["title"] else ""
                 lines.append(f"- {icon} [{pf}] {h['kind']} {h['url']}{title}")
+            for h in r["platform_direct_hits"][pf]:
+                icon = kind_icon.get(f"画像直接:{h['kind']}", "")
+                lines.append(f"- {icon} [{pf}] 画像直接:{h['kind']} {h['url']}")
             for h in r["platform_similar_hits"][pf]:
                 lines.append(f"- ⚪ [{pf}] 類似画像 {h['url']}")
         lines.append("")
@@ -507,6 +504,10 @@ def print_final_summary(stats, output_path):
     print(
         f"  ターゲットPF ページヒット: {stats['page_hit_count']}/{denom} "
         f"({percent(stats['page_hit_count'], denom)})"
+    )
+    print(
+        f"  強シグナル合算（ページ+直接一致、重複除去）: {stats['strong_signal_count']}/{denom} "
+        f"({percent(stats['strong_signal_count'], denom)})"
     )
     hit_platforms = [
         (pf, info["image_count"])

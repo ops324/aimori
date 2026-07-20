@@ -42,7 +42,9 @@ TARGET_PLATFORMS = {
         "official.ec", "buyshop.jp", "shopselect.net", "theshop.jp",
     ],
     "pixiv": ["pixiv.net"],
-    "X(Twitter)": ["x.com", "twitter.com"],
+    "BOOTH": ["booth.pm"],
+    "pixivFANBOX": ["fanbox.cc"],
+    "X(Twitter)": ["x.com", "twitter.com", "twimg.com"],
     "楽天市場": ["rakuten.co.jp"],
     "Yahoo!フリマ": ["paypayfleamarket.yahoo.co.jp"],
 }
@@ -134,6 +136,15 @@ def _explain_http_error(code, detail):
     return msg
 
 
+def explain_response_error(err):
+    """レスポンス内 "error" フィールドをユーザー向けメッセージに変換する。
+    HTTP自体は200でもクォータ超過を返すケースを、429と同じ文言で判別可能にする。"""
+    message = err.get("message", str(err))
+    if err.get("status") == "RESOURCE_EXHAUSTED" or "quota" in message.lower():
+        return f"APIエラー (クォータ超過): {message}"
+    return f"APIエラー: {message}"
+
+
 def summarize_web_detection(web):
     """webDetection dict を分類済みサマリ dict に変換。API呼び出し・I/Oなしの純粋関数。"""
     pages = web.get("pagesWithMatchingImages", []) or []
@@ -141,6 +152,8 @@ def summarize_web_detection(web):
     partial = web.get("partialMatchingImages", []) or []
     similar = web.get("visuallySimilarImages", []) or []
     entities = web.get("webEntities", []) or []
+    best_labels = web.get("bestGuessLabels", []) or []
+    best_guess = best_labels[0].get("label") if best_labels else None
 
     # ターゲットPFヒットを抽出
     # ① 掲載ページ（転載・転売 — 同一/部分一致画像が載っているページ）
@@ -154,7 +167,16 @@ def summarize_web_detection(web):
             kind = "完全一致" if has_full else ("部分一致" if has_partial else "掲載")
             flagged_pages.append((m[0], url, kind, p.get("pageTitle", "")))
 
-    # ② 類似画像URL（模倣品検知 — 別画像だが視覚的に似ているものがターゲットPFにある）
+    # ② 直接一致（画像そのものがターゲットPFのCDN上に完全/部分一致で存在——掲載ページが
+    #    Googleに未インデックスのケースも拾える。ページレベルのkindと同じ語彙を使うが、
+    #    区別は「どちらのリストに入っているか」という構造で行う）
+    flagged_direct = []
+    for img, kind in [(u, "完全一致") for u in full] + [(u, "部分一致") for u in partial]:
+        m = match_platform(img.get("url", ""))
+        if m:
+            flagged_direct.append((m[0], img.get("url", ""), kind))
+
+    # ③ 類似画像URL（模倣品検知 — 別画像だが視覚的に似ているものがターゲットPFにある）
     flagged_similar = []
     for img in similar:
         url = img.get("url", "")
@@ -170,10 +192,48 @@ def summarize_web_detection(web):
         "partial": partial,
         "similar": similar,
         "entities": entities,
+        "best_guess": best_guess,
         "flagged_pages": flagged_pages,
+        "flagged_direct": flagged_direct,
         "flagged_similar": flagged_similar,
-        "flagged_all": len(flagged_pages) + len(flagged_similar),
+        "flagged_all": len(flagged_pages) + len(flagged_direct) + len(flagged_similar),
         "other_pages": other_pages,
+    }
+
+
+def platform_hit_breakdown(summary):
+    """summarize_web_detection() の flagged_* を PF別 dict に再グルーピングする補助関数。
+    batch_verify.py など、PF別の内訳・has_page_hit 等が必要な呼び出し元向け。"""
+    platform_page_hits = {pf: [] for pf in TARGET_PLATFORMS}
+    platform_direct_hits = {pf: [] for pf in TARGET_PLATFORMS}
+    platform_similar_hits = {pf: [] for pf in TARGET_PLATFORMS}
+    for pf, url, kind, title in summary["flagged_pages"]:
+        platform_page_hits[pf].append({"url": url, "kind": kind, "title": title})
+    for pf, url, kind in summary["flagged_direct"]:
+        platform_direct_hits[pf].append({"url": url, "kind": kind})
+    for pf, url in summary["flagged_similar"]:
+        platform_similar_hits[pf].append({"url": url})
+
+    has_page_hit = any(platform_page_hits[pf] for pf in TARGET_PLATFORMS)
+    has_direct_hit = any(platform_direct_hits[pf] for pf in TARGET_PLATFORMS)
+    has_similar_only_hit = (
+        any(platform_similar_hits[pf] for pf in TARGET_PLATFORMS)
+        and not has_page_hit and not has_direct_hit
+    )
+    target_urls = {
+        h["url"]
+        for d in (platform_page_hits, platform_direct_hits, platform_similar_hits)
+        for pf in TARGET_PLATFORMS
+        for h in d[pf]
+    }
+    return {
+        "platform_page_hits": platform_page_hits,
+        "platform_direct_hits": platform_direct_hits,
+        "platform_similar_hits": platform_similar_hits,
+        "has_page_hit": has_page_hit,
+        "has_direct_hit": has_direct_hit,
+        "has_similar_only_hit": has_similar_only_hit,
+        "target_url_count": len(target_urls),
     }
 
 
@@ -187,8 +247,7 @@ def analyze_one(api_key, label, image_source, save_name, show_all=False):
 
     # APIがレスポンス単位でエラーを返す場合
     if "error" in resp0:
-        err = resp0["error"]
-        raise VisionAPIError(f"APIエラー: {err.get('message', err)}")
+        raise VisionAPIError(explain_response_error(resp0["error"]))
 
     web = resp0.get("webDetection", {})
 
@@ -203,7 +262,9 @@ def analyze_one(api_key, label, image_source, save_name, show_all=False):
     partial = summary["partial"]
     similar = summary["similar"]
     entities = summary["entities"]
+    best_guess = summary["best_guess"]
     flagged_pages = summary["flagged_pages"]
+    flagged_direct = summary["flagged_direct"]
     flagged_similar = summary["flagged_similar"]
     flagged_all = summary["flagged_all"]
 
@@ -218,7 +279,11 @@ def analyze_one(api_key, label, image_source, save_name, show_all=False):
     print(f"  部分一致画像 (partialMatchingImages) : {len(partial)} 件")
     print(f"  類似画像 (visuallySimilarImages)     : {len(similar)} 件")
     print(f"  ★ ターゲットPFヒット合計            : {flagged_all} 件"
-          f"  （掲載ページ {len(flagged_pages)} 件 ／ 類似画像 {len(flagged_similar)} 件）")
+          f"  （掲載ページ {len(flagged_pages)} 件 ／ 直接一致 {len(flagged_direct)} 件"
+          f" ／ 類似画像 {len(flagged_similar)} 件）")
+
+    if best_guess:
+        print(f"  推定内容: {best_guess}")
 
     if entities:
         top = [e.get("description", "") for e in entities[:5] if e.get("description")]
@@ -241,6 +306,14 @@ def analyze_one(api_key, label, image_source, save_name, show_all=False):
                 if title:
                     print(f"      └ {title}")
 
+        if full or partial:
+            print(f"\n🎯【直接一致画像 全件】画像自体が完全/部分一致（掲載ページ非経由）")
+            for img, kind in [(u, "完全一致") for u in full] + [(u, "部分一致") for u in partial]:
+                url = img.get("url", "")
+                m = match_platform(url)
+                pf_tag = f" [{m[0]}]" if m else ""
+                print(f"  ({kind}){pf_tag} {url}")
+
         if similar:
             print(f"\n🔍【類似画像一覧】全 {len(similar)} 件  ← デザインパクリ候補")
             for img in similar:
@@ -257,12 +330,17 @@ def analyze_one(api_key, label, image_source, save_name, show_all=False):
                 if title:
                     print(f"      └ {title}")
 
+        if flagged_direct:
+            print("\n🎯【直接一致】ターゲットPFで画像自体が完全/部分一致（掲載ページ未検出のケースを含む）")
+            for pf, url, kind in flagged_direct:
+                print(f"  ● [{pf}] ({kind}) {url}")
+
         if flagged_similar:
             print("\n⚠️ 【模倣品候補】ターゲットPFで見つかった類似画像")
             for pf, url in flagged_similar:
                 print(f"  ● [{pf}] {url}")
 
-        if not flagged_pages and not flagged_similar:
+        if not flagged_pages and not flagged_direct and not flagged_similar:
             print("\n（ターゲットPFでの一致・類似は見つかりませんでした）")
             print("  ヒント: --all オプションで全件の類似画像を確認できます")
 
