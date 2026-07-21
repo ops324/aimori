@@ -237,6 +237,25 @@ def platform_hit_breakdown(summary):
     }
 
 
+# 一致の種類による重要度（数値スコアは存在しないためカテゴリで序列化する）
+_SEVERITY_ORDER = {"完全一致": 0, "部分一致": 1, "掲載": 2, "類似": 3}
+
+
+def severity_rank(kind):
+    """一致種別を重要度ランクに変換（小さいほど重要）。未知の種別は最下位。"""
+    return _SEVERITY_ORDER.get(kind, 99)
+
+
+def sort_flagged(summary):
+    """flagged_pages / flagged_direct を重要度順(完全一致→部分一致→掲載)で安定ソートした
+    新しい dict を返す。summary 自体は書き換えない。flagged_similar は全件 kind='類似' の
+    ため対象外（ソートの意味がない）。API呼び出し・I/Oなしの純粋関数。
+    sorted() は安定ソートなので、同ランク内では元の(APIが返した関連度)順を維持する。"""
+    pages = sorted(summary["flagged_pages"], key=lambda t: severity_rank(t[2]))
+    direct = sorted(summary["flagged_direct"], key=lambda t: severity_rank(t[2]))
+    return {"flagged_pages": pages, "flagged_direct": direct}
+
+
 def analyze_one(api_key, label, image_source, save_name, show_all=False):
     """1画像を解析して結果を表示。生JSONを out/ に保存。"""
     body = build_request_body(image_source)

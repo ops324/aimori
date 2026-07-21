@@ -48,6 +48,7 @@ from reverse_search import (  # noqa: E402
     explain_response_error,
     get_api_key,
     safe_name,
+    sort_flagged,
     summarize_web_detection,
 )
 
@@ -57,6 +58,20 @@ WEBAPP_OUT_DIR = Path("/tmp/aimori_webapp") if _VERCEL else OUT_DIR / "webapp"
 # raw 14MB は base64 化後に約 18.7MB となり、Vision API の 20MB 上限に収まる余裕を見た値。
 MAX_CONTENT_LENGTH = 14 * 1024 * 1024
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
+
+# 結果画面に「登録画像」をインライン(data URI)表示する際の上限（raw bytes）。
+# Vercel の serverless レスポンスには ~4.5MB の上限があるため、大きい画像はプレビューを
+# 省略する（base64化で約1.37倍になるため 1.5MB → 約2.05MBのdata URIに収まる）。
+INLINE_PREVIEW_MAX = int(1.5 * 1024 * 1024)
+# data URI 用の MIME マップ。"image/jpg" は正式なMIMEタイプではないため専用に定義する。
+EXT_MIME = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+}
 
 # モジュール最上位で解決（__main__ の外）。
 # python3 poc/webapp.py 以外（flask run / gunicorn 等）では __name__ が "webapp" になり
@@ -159,6 +174,20 @@ a{color:var(--color-accent-ink);text-underline-offset:.22em;text-decoration-thic
 main{padding-block:var(--space-xl)}
 h1{font-size:var(--text-xl);margin-bottom:var(--space-sm)}
 .note{color:var(--color-ink-soft);font-size:var(--text-sm)}
+
+/* 重要度バッジ（一致の種類による色分け。数値スコアは存在しないためカテゴリ表示） */
+.sev-badge{display:inline-block;font-size:var(--text-xs);font-weight:700;padding:.25em .8em;border-radius:var(--radius-pill);border:var(--rule) solid transparent;white-space:nowrap}
+.sev-full{background:var(--color-clay-soft);color:var(--color-clay);border-color:var(--color-clay)}
+.sev-partial{background:var(--color-accent-soft);color:var(--color-accent-ink);border-color:var(--color-accent)}
+.sev-listed,.sev-similar{background:var(--color-paper-2);color:var(--color-ink-soft);border-color:var(--color-line)}
+
+/* サムネイルグリッド（一致画像の視覚的な確認用） */
+.thumb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:var(--space-sm);margin:var(--space-sm) 0}
+.thumb-card{background:var(--color-paper-2);border:var(--rule) solid var(--color-line);border-radius:var(--radius-md);padding:var(--space-xs);overflow:hidden}
+.thumb{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:var(--radius-sm);background:var(--color-paper-2)}
+.thumb-card figcaption{font-size:var(--text-xs);margin-top:var(--space-2xs);display:flex;flex-wrap:wrap;align-items:center;gap:.4em;color:var(--color-ink-soft)}
+.thumb-card .thumb-link{color:var(--color-accent-ink);font-weight:500}
+.thumb-card.img-broken .thumb{display:none}
 """
 
 
@@ -204,6 +233,27 @@ FORM_TMPL = """
     [aria-busy="true"]::after { display: none; }
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  .scan-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: oklch(97.5% 0.012 85 / .92); backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center; padding: var(--space-md);
+  }
+  .scan-overlay[hidden] { display: none; }
+  .scan-overlay-card {
+    background: var(--color-paper); border: var(--rule) solid var(--color-line);
+    border-radius: var(--radius-md); padding: var(--space-xl); max-width: 26rem;
+    text-align: center; box-shadow: 0 12px 30px oklch(30% 0.02 60 / .18);
+  }
+  .scan-overlay-spinner {
+    width: 2.4rem; height: 2.4rem; margin: 0 auto var(--space-md);
+    border: 3px solid var(--color-line); border-top-color: var(--color-accent); border-radius: 50%;
+  }
+  @media(prefers-reduced-motion:no-preference) {
+    .scan-overlay-spinner { animation: spin 0.9s linear infinite; }
+  }
+  .scan-overlay-card h2 { font-size: var(--text-lg); margin-bottom: var(--space-xs); }
+  .scan-overlay-card p { color: var(--color-ink-soft); font-size: var(--text-sm); }
 </style>
 </head>
 <body>
@@ -232,6 +282,13 @@ FORM_TMPL = """
     <button type="submit" class="btn btn-primary" id="scan-submit">検索する</button>
   </p>
 </form>
+<div class="scan-overlay" id="scan-overlay" role="status" aria-live="polite" hidden>
+  <div class="scan-overlay-card">
+    <div class="scan-overlay-spinner" aria-hidden="true"></div>
+    <h2>ネットを巡回して照合中…</h2>
+    <p>数十秒かかることがあります。ページを閉じずにお待ちください。</p>
+  </div>
+</div>
 </main>
 <script>
 (function () {
@@ -278,11 +335,26 @@ FORM_TMPL = """
     }
   });
 
+  var overlay = document.getElementById('scan-overlay');
+
   document.getElementById('scan-form').addEventListener('submit', function () {
     var btn = document.getElementById('scan-submit');
     btn.disabled = true;
     btn.setAttribute('aria-busy', 'true');
     btn.textContent = '検索中…（数秒〜数十秒かかります）';
+    overlay.hidden = false;
+    document.body.style.overflow = 'hidden';
+  });
+
+  // 戻るボタン等で bfcache からこのページが復元された場合、送信中の見た目
+  // （オーバーレイ表示・ボタン無効化）が固まったまま残ってしまうのを防ぐ。
+  window.addEventListener('pageshow', function () {
+    var btn = document.getElementById('scan-submit');
+    overlay.hidden = true;
+    document.body.style.overflow = '';
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    btn.textContent = '検索する';
   });
 })();
 </script>
@@ -321,6 +393,18 @@ RESULT_TMPL = """
   ul.result-list { padding-left: 20px; }
   ul.result-list li { margin-bottom: 6px; word-break: break-all; }
   a.back { display: inline-block; margin-top: var(--space-lg); }
+  .sec-note { margin-bottom: var(--space-xs); }
+  .compare-strip { margin: var(--space-md) 0; }
+  .compare-strip .thumb { width: 140px; aspect-ratio: 1/1; }
+  .goodnews {
+    background: var(--color-accent-soft); border: var(--rule) solid var(--color-accent);
+    border-radius: var(--radius-md); padding: var(--space-lg); margin: var(--space-md) 0;
+  }
+  .goodnews h2 { margin-top: 0; }
+  .goodnews p { margin-top: var(--space-xs); }
+  details.result-details { margin: var(--space-xs) 0 var(--space-md); }
+  details.result-details summary { cursor: pointer; color: var(--color-accent-ink); font-weight: 500; font-size: var(--text-sm); padding: .3em 0; }
+  details.result-details ul.result-list { margin-top: var(--space-xs); }
 </style>
 </head>
 <body>
@@ -334,6 +418,9 @@ RESULT_TMPL = """
   </div>
 </header>
 <main class="wrap">
+{% set SEV_CLASS = {"完全一致":"sev-full","部分一致":"sev-partial","掲載":"sev-listed","類似":"sev-similar"} %}
+{% macro sev_badge(kind) %}<span class="sev-badge {{ SEV_CLASS.get(kind,'sev-similar') }}">{{ kind }}</span>{% endmacro %}
+
 <h1>検索結果: {{ filename }}</h1>
 
 <div class="stats">
@@ -351,12 +438,30 @@ RESULT_TMPL = """
 </ul>
 {% endif %}
 
+{% if uploaded_uri %}
+<figure class="compare-strip">
+  <img class="thumb" src="{{ uploaded_uri }}" alt="アップロードした登録画像">
+  <figcaption class="note">アップロード画像（登録した作品）</figcaption>
+</figure>
+{% else %}
+<p class="note">（画像プレビューは、大きなファイルのため省略しています）</p>
+{% endif %}
+
+{% if summary.flagged_all == 0 %}
+<section class="goodnews">
+  <h2><span aria-hidden="true">✅</span> ターゲットPFでの転載・模倣は見つかりませんでした</h2>
+  <p>現時点で、メルカリ・minne等のターゲットPFでの転載・模倣品候補は検出されませんでした。</p>
+  <p class="note">ただし、これは「存在しない」ことの保証ではありません。検索エンジンに未インデックスの出品や、加工された転載は見つからない場合があります。定期的な再チェックをおすすめします。</p>
+  {% if summary.other_pages %}<p class="note">なお、ターゲットPF以外での掲載ページが {{ summary.other_pages|length }} 件見つかっています（下記【参考】をご確認ください）。</p>{% endif %}
+</section>
+{% else %}
+
 <h2><span aria-hidden="true">🚨</span> ターゲットPFヒット（掲載ページ・転載/転売の疑い）</h2>
-{% if summary.flagged_pages %}
+<p class="note sec-note">重要度（一致の種類による）順に表示</p>
+{% if flagged_pages %}
 <ul class="result-list">
-  {% for pf, url, kind, title in summary.flagged_pages %}
-  <li>[{{ pf }}] ({{ kind }}) <a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a>
-    {% if title %}<br><span class="note">{{ title }}</span>{% endif %}</li>
+  {% for pf, url, kind, title in flagged_pages %}
+  <li>[{{ pf }}] {{ sev_badge(kind) }} <a href="{{ url }}" target="_blank" rel="noopener">{{ title or url }}</a></li>
   {% endfor %}
 </ul>
 {% else %}
@@ -364,25 +469,56 @@ RESULT_TMPL = """
 {% endif %}
 
 <h2><span aria-hidden="true">🎯</span> ターゲットPF直接一致（画像そのものが完全/部分一致としてCDN上で検出）</h2>
-{% if summary.flagged_direct %}
+<p class="note sec-note">重要度（一致の種類による）順に表示</p>
+{% if flagged_direct %}
+<div class="thumb-grid">
+  {% for pf, url, kind in flagged_direct %}
+  <figure class="thumb-card">
+    <img class="thumb" src="{{ url }}" alt="[{{ pf }}] {{ kind }} の一致画像"
+         loading="lazy" referrerpolicy="no-referrer"
+         onerror="this.closest('.thumb-card').classList.add('img-broken')">
+    <figcaption>[{{ pf }}] {{ sev_badge(kind) }}
+      <a class="thumb-link" href="{{ url }}" target="_blank" rel="noopener">画像を開く</a>
+    </figcaption>
+  </figure>
+  {% endfor %}
+</div>
+<details class="result-details"><summary>URL一覧をすべて表示</summary>
 <ul class="result-list">
-  {% for pf, url, kind in summary.flagged_direct %}
+  {% for pf, url, kind in flagged_direct %}
   <li>[{{ pf }}] (画像直接:{{ kind }}) <a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a></li>
   {% endfor %}
 </ul>
+</details>
 {% else %}
 <p class="note">該当なし</p>
 {% endif %}
 
 <h2><span aria-hidden="true">⚠️</span> 模倣品候補（ターゲットPFの類似画像のみ）</h2>
 {% if summary.flagged_similar %}
+<div class="thumb-grid">
+  {% for pf, url in summary.flagged_similar %}
+  <figure class="thumb-card">
+    <img class="thumb" src="{{ url }}" alt="[{{ pf }}] 類似画像"
+         loading="lazy" referrerpolicy="no-referrer"
+         onerror="this.closest('.thumb-card').classList.add('img-broken')">
+    <figcaption>[{{ pf }}] {{ sev_badge('類似') }}
+      <a class="thumb-link" href="{{ url }}" target="_blank" rel="noopener">画像を開く</a>
+    </figcaption>
+  </figure>
+  {% endfor %}
+</div>
+<details class="result-details"><summary>URL一覧をすべて表示</summary>
 <ul class="result-list">
   {% for pf, url in summary.flagged_similar %}
   <li>[{{ pf }}] <a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a></li>
   {% endfor %}
 </ul>
+</details>
 {% else %}
 <p class="note">該当なし</p>
+{% endif %}
+
 {% endif %}
 
 <h2>【参考】その他掲載ページ</h2>
@@ -399,11 +535,23 @@ RESULT_TMPL = """
 
 <h2>【類似画像 全件】（ターゲットPF問わず、CLIの --all 相当）</h2>
 {% if summary.similar %}
+<div class="thumb-grid">
+  {% for img in summary.similar %}
+  <figure class="thumb-card">
+    <img class="thumb" src="{{ img.url }}" alt="類似画像"
+         loading="lazy" referrerpolicy="no-referrer"
+         onerror="this.closest('.thumb-card').classList.add('img-broken')">
+    <figcaption><a class="thumb-link" href="{{ img.url }}" target="_blank" rel="noopener">画像を開く</a></figcaption>
+  </figure>
+  {% endfor %}
+</div>
+<details class="result-details"><summary>URL一覧をすべて表示</summary>
 <ul class="result-list">
   {% for img in summary.similar %}
   <li><a href="{{ img.url }}" target="_blank" rel="noopener">{{ img.url }}</a></li>
   {% endfor %}
 </ul>
+</details>
 {% else %}
 <p class="note">該当なし</p>
 {% endif %}
@@ -540,10 +688,23 @@ def scan():
         # Vercel環境では WEBAPP_OUT_DIR が /tmp 配下になり、_HERE のサブパスにならない。
         out_path_display = str(out_path)
 
+    sorted_flagged = sort_flagged(summary)
+
+    # 登録画像のインラインプレビュー(data URI)。既に計算済みの b64 を再利用し、
+    # 大きすぎる画像は Vercel のレスポンスサイズ上限を避けるためプレビューを省略する。
+    uploaded_uri = None
+    if len(data) <= INLINE_PREVIEW_MAX:
+        mime = EXT_MIME.get(ext)
+        if mime:
+            uploaded_uri = f"data:{mime};base64,{b64}"
+
     return render_template_string(
         RESULT_TMPL,
         filename=f.filename,
         summary=summary,
+        flagged_pages=sorted_flagged["flagged_pages"],
+        flagged_direct=sorted_flagged["flagged_direct"],
+        uploaded_uri=uploaded_uri,
         out_path=out_path_display,
     )
 
