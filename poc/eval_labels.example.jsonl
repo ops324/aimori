@@ -1,0 +1,20 @@
+# AIMORI リランキング評価ラベル雛形 (JSONL / 1行1候補)
+# ------------------------------------------------------------------
+# これはコミットされる「雛形」です。実際のラベルは poc/out/eval_labels.jsonl に作成してください
+# （out/ は .gitignore 済み。画像情報を含むためコミットしない）。
+#
+# 手順:
+#   1) 公開の転載/パクリ事例をクエリに選び、`python3 poc/reverse_search.py <query>` で
+#      Vision スキャン → poc/out/<name>.web.json が生成される。
+#   2) その候補 URL に対し、1=侵害/一致 の陽性・0=無関係 を人手で付与し、下記形式で書く。
+#   3) `python3 poc/eval_rerank.py --labels poc/out/eval_labels.jsonl` で評価。
+#
+# フィールド:
+#   query  : クエリ画像（登録作品）のパス
+#   source : そのクエリの保存済み Vision レスポンス (poc/out/*.web.json)
+#   url    : 候補画像 URL（source 内の full/partial/similar バケットに含まれるもの）
+#   label  : 1=陽性（侵害/同一作品）, 0=陰性（無関係）
+#
+# '#' 始まりの行と空行は無視されます。以下はダミー例（実際の URL に置き換えてください）:
+{"query": "poc/test_images/book.jpg", "source": "poc/out/book.jpg.web.json", "url": "https://example.com/real-repost.jpg", "label": 1}
+{"query": "poc/test_images/book.jpg", "source": "poc/out/book.jpg.web.json", "url": "https://example.com/unrelated.jpg", "label": 0}

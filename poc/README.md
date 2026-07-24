@@ -185,8 +185,47 @@ python3 poc/batch_verify.py poc/test_images/
 
 ---
 
+## オフライン評価ハーネス（フェーズ2 効果検証）
+
+改変画像（色変え・反転・トリミング）対策の二次リランキングが**実際に効くか**を、
+新しい API を叩かず・Vercel に触れず、ローカルで最小コスト検証するツール群。
+背景と投資順序は [`docs/DL_ROADMAP.md`](../docs/DL_ROADMAP.md) を参照。
+
+- `rerank.py` — Vision が返した候補画像（full/partial/similar バケット）に、クエリ画像との
+  **本物の 0–1 類似度スコア**を付与して再ランキングする。手法は `--method {phash,clip,dino}`。
+  デフォルト `phash` は Pillow だけで動く（`clip`/`dino` は `requirements-ml.txt` が必要）。
+- `eval_rerank.py` — 人手ラベル（0/1）に対し **Recall@k / mAP** を算出し、
+  「Vision カテゴリ順」vs「自前スコア順」を比較。レポート（md/csv/サムネhtml）を出力。
+
+### 使い方
+
+```bash
+# 依存（最小: phash のみ）
+pip install Pillow imagehash          # または: pip install -r poc/requirements-ml.txt
+
+# 1) データ: 公開の転載/パクリ事例を Vision スキャン（既存 CLI）
+python3 poc/reverse_search.py <query.jpg>      # → poc/out/<name>.web.json
+
+# 2) 再ランキングのスモーク確認（保存済みレスポンスを再利用）
+python3 poc/rerank.py --query <query.jpg> --from poc/out/<name>.web.json
+python3 poc/rerank.py --method clip --query <query.jpg> --from poc/out/<name>.web.json
+
+# 3) 評価: 候補にラベル(0/1)を付けて Recall@k/mAP
+#    雛形 poc/eval_labels.example.jsonl を poc/out/eval_labels.jsonl にコピーして編集
+python3 poc/eval_rerank.py --labels poc/out/eval_labels.jsonl --method phash
+# → poc/out/rerank_report.md / rerank_report.csv / rerank_thumbs.html
+```
+
+### 重要な但し書き
+- **完全オフライン**。`webapp.py` / `vercel.json` には一切触れない（Vercel では CLIP 推論を動かせない）。
+- 対象は **full/partial/similar の画像候補のみ**。`pages`（ページ URL）は今回対象外。
+- サードパーティ画像の取得は 30–50% 失敗し得る（既存 UI が壊れサムネを隠すのと同じ理由）。
+  取得成否は候補ごとに記録し、失敗は「未取得」として指標から除外する。
+- **小標本では指標は方向性の目安**。レポートは クエリ ≥5・陽性 ≥20 未満を「暫定」と明示し、
+  本番運用の閾値は提案しない。判定材料として過信しないこと。
+
 ## 次のステップ（このPoCの外）
 
-- 改変画像（色調変更・反転・トリミング）対策として **CLIP** による二次類似判定を追加
+- 上記ハーネスで効果を確認できたら、二次リランキングを**常駐バックエンド**（GCP コンテナ等）に載せる（フェーズ2実装）
 - 定期スキャン・作品DB・通知のWebアプリ化（軽量な単一画像版は本PoCの `webapp.py` として先行実装済み。ユーザー登録・課金・定期実行を含む本格版は依然フェーズ2の範囲）
 - 削除要請テンプレ生成（※非弁リスクの論点整理が前提）

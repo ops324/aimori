@@ -1,0 +1,20 @@
+# AIMORI オフライン評価ハーネス用の ML 依存（ローカル実行専用）
+# ------------------------------------------------------------------
+# ★ これは poc/requirements.txt とは別物。Vercel のビルドには含めないこと。
+#   （Vercel 関数は /tmp のみ書込・実行時間制限・GPUなしで、CLIP 推論を載せられない。
+#    詳細は docs/DL_ROADMAP.md §4 を参照）
+#
+# 使い分け:
+#   --method phash : Pillow だけあれば動く（imagehash があればより堅牢な pHash を使用）
+#   --method clip  : open_clip_torch + torch
+#   --method dino  : transformers + torch
+#
+# 最小（phash のみ試す場合）:
+#   pip install Pillow imagehash
+#
+# フル:
+Pillow>=10
+imagehash>=4.3
+torch>=2.2
+open_clip_torch>=2.24
+transformers>=4.40
