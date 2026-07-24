@@ -163,6 +163,42 @@ class AhashCtl:
         return 1.0 - _hamming(a_bits[:n], b[:n]) / n
 
 
+class MultiHashPhash:
+    """(a) 加工前正規化。参照画像を {反転 × 微小回転} に増幅し、最大類似度を取る。
+    反転・回転に不変な照合を torch 無しで実現する。クロップ/コラージュは幾何構造が
+    変わるため、この正規化では回復しない想定（＝残余領域の切り分けになる）。"""
+
+    name = "multihash(phash+flip/rot)"
+    ANGLES = (-15, -10, -5, 0, 5, 10, 15)
+
+    def __init__(self):
+        self._ih = require("imagehash")
+
+    def _variants(self, img):
+        from PIL import Image
+        bases = [img, img.transpose(Image.FLIP_LEFT_RIGHT)]
+        out = []
+        for b in bases:
+            for ang in self.ANGLES:
+                out.append(b if ang == 0 else b.rotate(ang, expand=False))
+        return out
+
+    def _phash_bits(self, img):
+        return self._ih.phash(img, hash_size=16).hash.flatten().tolist()
+
+    def bits(self, img):
+        # 参照側だけ増幅（照合コストは候補数×変種数。距離計算のみで安価）
+        return [self._phash_bits(v) for v in self._variants(img)]
+
+    def sim(self, ref_variants, b_img):
+        b = self._phash_bits(b_img)
+        best = 0.0
+        for a in ref_variants:
+            n = min(len(a), len(b))
+            best = max(best, 1.0 - _hamming(a[:n], b[:n]) / n)
+        return best
+
+
 # ---------------------------------------------------------------------------
 # 評価本体
 # ---------------------------------------------------------------------------
@@ -179,7 +215,7 @@ def evaluate(corpus_paths, outdir):
         sys.exit(1)
 
     transforms = build_transforms()
-    scorers = [PhashReal(), AhashCtl()]
+    scorers = [PhashReal(), AhashCtl(), MultiHashPhash()]
 
     # rows[(method, transform)] = list of per-original dict
     rows = {(s.name, t): [] for s in scorers for t in transforms}
@@ -282,6 +318,17 @@ def write_report(agg, scorers, transforms, n, outdir):
     lines.append(f"- **pHash が aHash を明確に上回る加工**（retrieval_rate 差 ≥ 0.2）: {', '.join(gap) or '（なし）'}")
     lines.append(f"  → 「pHash」を名乗らず aHash で測っていたら、この差ぶんだけ**過小評価**し"
                  f"「安価ハッシュはダメ→CLIP必須」と誤結論する危険があった（監査指摘の実証）。")
+    # (a) マルチハッシュ正規化の効果（3番目のスコアラがあれば）
+    mh = next((s.name for s in scorers[2:]), None)
+    if mh:
+        recovered = [t for t in broken if agg[(mh, t)]["retrieval_rate"] >= 0.9]
+        residual = [t for t in broken if agg[(mh, t)]["retrieval_rate"] < 0.5]
+        lines.append(f"- **(a) マルチハッシュ正規化で回復した加工**（pHash破綻→multihash ≥0.9）: "
+                     f"{', '.join(recovered) or '（なし）'}")
+        lines.append(f"  → torch 不要の加工前正規化（反転・回転の増幅照合）で回収可能。**CLIP は不要**。")
+        lines.append(f"- **マルチハッシュでも残る破綻**（multihash < 0.5）: {', '.join(residual) or '（なし）'}")
+        lines.append(f"  → 幾何構造が変わる加工（クロップ・コラージュ等）はハッシュ系では回復せず、"
+                     f"**ここが (b) CLIP/DINO 埋め込みの検証対象**として残余領域になる。")
     lines.append("")
 
     # 本番評価の仕様（decision ではなく spec）
