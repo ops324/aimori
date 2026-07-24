@@ -192,10 +192,14 @@ python3 poc/batch_verify.py poc/test_images/
 背景と投資順序は [`docs/DL_ROADMAP.md`](../docs/DL_ROADMAP.md) を参照。
 
 - `rerank.py` — Vision が返した候補画像（full/partial/similar バケット）に、クエリ画像との
-  **本物の 0–1 類似度スコア**を付与して再ランキングする。手法は `--method {phash,clip,dino}`。
-  デフォルト `phash` は Pillow だけで動く（`clip`/`dino` は `requirements-ml.txt` が必要）。
+  **本物の 0–1 類似度スコア**を付与して再ランキングする。手法は `--method {phash,multihash,clip,dino}`。
+  `phash`/`multihash` は Pillow（＋`imagehash`推奨）だけで動く（`clip`/`dino` は `requirements-ml.txt` が必要）。
+  - `multihash` = `phash` に**加工前正規化**（左右反転×±5/10/15°回転の増幅照合）を足した版。torch 不要のまま
+    反転・回転に不変な照合ができる（実測: 反転 0.00→0.90、15°回転 0.14→0.90。`docs/RERANK_FINDINGS.md`）。
 - `eval_rerank.py` — 人手ラベル（0/1）に対し **Recall@k / mAP** を算出し、
   「Vision カテゴリ順」vs「自前スコア順」を比較。レポート（md/csv/サムネhtml）を出力。
+- `eval_transforms.py` — 18種の加工（測光系/幾何系）への **retrieval_rate** を pHash / aHash / multihash で
+  distractor 付き比較（torch 不要・完全ローカル）。どの加工が安価手法で回収できるかを実測する。
 
 ### 使い方
 
@@ -207,10 +211,15 @@ pip install Pillow imagehash          # または: pip install -r poc/requiremen
 python3 poc/reverse_search.py <query.jpg>      # → poc/out/<name>.web.json
 
 # 2) 再ランキングのスモーク確認（保存済みレスポンスを再利用）
-python3 poc/rerank.py --query <query.jpg> --from poc/out/<name>.web.json
-python3 poc/rerank.py --method clip --query <query.jpg> --from poc/out/<name>.web.json
+python3 poc/rerank.py --query <query.jpg> --from poc/out/<name>.web.json                 # phash（既定）
+python3 poc/rerank.py --method multihash --query <query.jpg> --from poc/out/<name>.web.json  # 反転/回転に強い（torch不要）
+python3 poc/rerank.py --method clip --query <query.jpg> --from poc/out/<name>.web.json    # 埋め込み（要ML依存）
 
-# 3) 評価: 候補にラベル(0/1)を付けて Recall@k/mAP
+# 3) 加工ロバストネスの実測（torch不要・入力画像だけで完結）
+python3 poc/eval_transforms.py
+# → poc/out/transform_eval.md / transform_eval.csv（測光系/幾何系ごとの retrieval_rate）
+
+# 4) 実候補の評価: ラベル(0/1)を付けて Recall@k/mAP
 #    雛形 poc/eval_labels.example.jsonl を poc/out/eval_labels.jsonl にコピーして編集
 python3 poc/eval_rerank.py --labels poc/out/eval_labels.jsonl --method phash
 # → poc/out/rerank_report.md / rerank_report.csv / rerank_thumbs.html
