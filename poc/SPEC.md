@@ -364,7 +364,7 @@ vercel deploy --prod
 - **二次リランキング（安価ハッシュ優先 → 幾何加工のみ埋め込み）**：Google Vision APIが返した類似画像URL（full/partial/similar）に対し、クエリ画像との**本物の0-1類似度**を自前計算して並べ替え、改変画像の精度を向上。
   - **実測所見（[`docs/RERANK_FINDINGS.md`](../docs/RERANK_FINDINGS.md)）**：ローカル実画像21枚・distractor付きの分離性評価で、**測光系の加工（JPEG圧縮・明度・コントラスト・彩度・色相シフト・グレースケール・ぼかし・リサイズ・小クロップ）は pHash/aHash とも retrieval 0.90＝安価ハッシュで回収可能**。一方**幾何系（左右反転・15°回転・25%クロップ・コラージュ）は両ハッシュとも破綻**。pHash が aHash を明確に上回る加工は0件だった。
   - **対処の順序（3段、(a)は実測済み）**：**pHash（測光系）→ マルチハッシュ正規化（反転・回転）→ CLIP/DINOv2（残余のみ）**。重い投資を最後に回す。
-    - (a) **加工前正規化＝torch不要・低コスト**を実装・実測済み（`multihash(phash+flip/rot)`）。**左右反転 0.00→0.90、15°回転 0.14→0.90 と完全回復**し、ここまで GPU 不要で大半の加工をカバーできることを確認。
+    - (a) **加工前正規化＝torch不要・低コスト**を実装・実測済み（`multihash(phash+flip/rot)`）。**左右反転 0.00→0.90、15°回転 0.14→0.90 と完全回復**し、ここまで GPU 不要で大半の加工をカバーできることを確認。リランカ本体でも **`poc/rerank.py --method multihash`** として選択可能（`phash → multihash → clip/dino` を切替）。
     - (b) **クロップ・コラージュ（幾何構造が変わる加工）のみ残余** — マルチハッシュでも回復せず（25%クロップ 0.05／コラージュ 0.00）。CLIP/DINOv2（別コンテナ・GPU）の検証対象はこの残余に限定。要否は「クロップ/コラージュ耐性が製品要件か」を本番データ・ユーザー要望で判断。
   - **効果検証はオフラインで実装済み**：`poc/eval_transforms.py`（変換ロバストネス）＋ `poc/rerank.py`／`poc/eval_rerank.py`（実候補リランキング Recall@k/mAP）。新API不要・`webapp.py`/Vercel非依存。ML依存は `poc/requirements-ml.txt` に分離（`requirements.txt` は `Flask` のみ維持）。使い方は `poc/README.md`「オフライン評価ハーネス」節、投資順序は `docs/DL_ROADMAP.md` を参照。
   - **本番搭載時の注意**：CLIP推論はVercel関数（`/tmp`のみ・実行時間制限・GPUなし）では動かせないため、常駐バックエンドコンテナに置く。
