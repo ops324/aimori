@@ -241,7 +241,7 @@ python3 reverse_search.py --all image.jpg
 |------|------|------|
 | Googleのインデックス遅延 | 転載されてからGoogleにインデックスされるまで数日〜数週間かかる場合がある | 許容する（完全リアルタイムは不可）|
 | インデックスされていないページは検知不可 | 非公開出品・新着出品は未インデックスのことがある | 定期スキャンで経時的に拾う |
-| 改変画像の検知限界 | 大幅な色変更・反転・コラージュは `visuallySimilarImages` でも見逃す場合がある | フェーズ2でCLIP二次判定を追加（予定）|
+| 改変画像の検知限界 | 大幅な色変更・反転・コラージュは `visuallySimilarImages` でも見逃す場合がある | フェーズ2で二次リランキング（pHash→必要ならCLIP）を追加。効果検証ハーネスは実装済み（`poc/rerank.py`/`poc/eval_rerank.py`）|
 | 画像サイズ上限 | base64エンコード後20MB超はAPIエラー | 4MB超で警告を表示、リサイズを案内 |
 | ~~batch_verify.pyの429検知の穴~~（修正済み） | 従来は `batch_verify.py` の429検知が `"APIエラー (HTTP 429)"` のliteral一致（HTTPエラー経路のみ）で、HTTP 200 + レスポンス内 `"error"` でクォータ超過が返るケースを検知できなかった | `reverse_search.py` に共有ヘルパー `explain_response_error(err)` を追加し、`status == "RESOURCE_EXHAUSTED"` またはメッセージに `"quota"` を含む場合は `"APIエラー (クォータ超過)"` という専用文言を出すよう統一。`batch_verify.py` の429検知もこの文言を追加でチェックするよう修正済み |
 | Webappの拡張子検査 | アップロード画像の検証は拡張子（`.jpg`等）のみで、内容は検証していない | 内部ローカルツールとして許容 |
@@ -361,10 +361,12 @@ vercel deploy --prod
 
 ### フェーズ2で追加予定
 - **掲載ページ（転載の疑い）のサムネイル化**：最重要シグナルである `flagged_pages` に視覚証拠を付ける。`pages[i].fullMatchingImages[0].url`（fallback `partialMatchingImages`）から画像URLを取得する。`flagged_pages` のtuple arityは変えず、`reverse_search.py` に純粋ヘルパーを additive 追加して `batch_verify.py` を非破壊に保つ方針。ホットリンク破損も多いため実データ検証とセットで行う
-- **CLIP二次判定**：Google Vision APIが返した類似画像URLに対してCLIPで特徴量比較を行い、改変画像の精度を向上
+- **二次リランキング（pHash → 必要ならCLIP）**：Google Vision APIが返した類似画像URL（full/partial/similar）に対し、クエリ画像との**本物の0-1類似度**を自前計算して並べ替え、改変画像（色変え・反転・切り抜き）の精度を向上。まず軽量な pHash をベースラインとし、取りこぼす場合のみ CLIP/DINOv2 を投入する。
+  - **効果検証はオフラインで実装済み**：`poc/rerank.py`（リランカ本体）＋ `poc/eval_rerank.py`（Recall@k/mAP でVision順 vs 自前スコア順を比較）。新API不要・`webapp.py`/Vercel非依存。ML依存は `poc/requirements-ml.txt` に分離（`requirements.txt` は `Flask` のみ維持）。使い方は `poc/README.md`「オフライン評価ハーネス」節、投資順序は `docs/DL_ROADMAP.md` を参照。
+  - **本番搭載時の注意**：CLIP推論はVercel関数（`/tmp`のみ・実行時間制限・GPUなし）では動かせないため、常駐バックエンドコンテナに置く。
 - **Webアプリ化（本格版）**：作品登録・スキャン結果・案件管理をUI化。軽量な単一画像版はPoCの `webapp.py` として先行実装済み（ユーザー登録・課金・定期実行は依然未実装）
 - **定期スキャンの自動化**：スケジューラで登録作品を定期的にスキャン
 
 ### フェーズ3以降
-- CLIP + Qdrant によるベクトル検索（大規模ユーザー対応）
+- CLIP/DINOv2 + Qdrant によるベクトル検索（大規模ユーザー対応・ANN設計）／知財特化のドメインファインチューニング
 - 削除要請テンプレート自動生成（弁護士確認後）
